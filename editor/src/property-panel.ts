@@ -344,6 +344,48 @@ export class PropertyPanel {
     // liveOriginals are NOT loaded - they come from game on connect
   }
 
+  /**
+   * Capture live original values from game hierarchy.
+   * Called once when hierarchy is first received after connection.
+   */
+  captureOriginals(nodes: ContainerNode[]): void {
+    this._liveOriginals.clear();
+
+    const captureNode = (node: ContainerNode) => {
+      this._liveOriginals.set(node.id, {
+        layout: node.layout ? { ...node.layout } : {},
+        transform: node.transform ? { ...node.transform } : {},
+      });
+      node.children.forEach(captureNode);
+    };
+
+    nodes.forEach(captureNode);
+    console.log(`[PropertyPanel] Captured originals for ${this._liveOriginals.size} nodes`);
+  }
+
+  /**
+   * Clear originals (called on disconnect).
+   */
+  clearOriginals(): void {
+    this._liveOriginals.clear();
+  }
+
+  /**
+   * Check if we have captured originals (i.e., connected to game).
+   */
+  hasOriginals(): boolean {
+    return this._liveOriginals.size > 0;
+  }
+
+  /**
+   * Get the live original value for a node's property.
+   */
+  getOriginalValue(nodeId: string, property: string, isTransform: boolean): any {
+    const originals = this._liveOriginals.get(nodeId);
+    if (!originals) return undefined;
+    return isTransform ? originals.transform[property] : originals.layout[property];
+  }
+
   getSessionChanges(): Map<string, Record<string, any>> {
     return this._sessionChanges;
   }
