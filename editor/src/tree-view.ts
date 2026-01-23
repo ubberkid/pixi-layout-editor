@@ -8,6 +8,7 @@ export class TreeView {
   private _hierarchy: ContainerNode[] = [];
   private _selectedId: string | null = null;
   private _expandedIds: Set<string> = new Set();
+  private _changedNodeIds: Set<string> = new Set();
   private _onSelect: SelectHandler | null = null;
   private _onHover: HoverHandler | null = null;
 
@@ -21,6 +22,11 @@ export class TreeView {
 
   onHover(handler: HoverHandler): void {
     this._onHover = handler;
+  }
+
+  setChangedNodes(nodeIds: Set<string>): void {
+    this._changedNodeIds = nodeIds;
+    this.render();
   }
 
   getSelectedId(): string | null {
@@ -84,6 +90,14 @@ export class TreeView {
     const label = document.createElement('span');
     label.className = 'tree-node-label';
     label.textContent = node.id || `[${node.type}]`;
+
+    // Show change indicator
+    if (this._changedNodeIds.has(node.id)) {
+      const changeDot = document.createElement('span');
+      changeDot.className = 'tree-node-change-dot';
+      changeDot.title = 'Has unsaved changes';
+      label.appendChild(changeDot);
+    }
 
     // Show indicator for layout status
     if (!layoutEnabled) {

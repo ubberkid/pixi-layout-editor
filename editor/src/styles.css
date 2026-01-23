@@ -311,6 +311,16 @@ button:disabled {
   display: none;
 }
 
+.tree-node-change-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #e8a838;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Property Panel */
 #property-panel {
   flex: 1;
