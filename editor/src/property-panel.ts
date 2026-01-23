@@ -313,6 +313,7 @@ interface SessionData {
 interface LiveOriginals {
   layout: Record<string, any>;
   transform: Record<string, any>;
+  layoutEnabled: boolean;
 }
 
 export class PropertyPanel {
@@ -355,6 +356,7 @@ export class PropertyPanel {
       this._liveOriginals.set(node.id, {
         layout: node.layout ? { ...node.layout } : {},
         transform: node.transform ? { ...node.transform } : {},
+        layoutEnabled: node.layoutEnabled,
       });
       node.children.forEach(captureNode);
     };
@@ -376,6 +378,9 @@ export class PropertyPanel {
   getOriginalValue(nodeId: string, property: string, isTransform: boolean): any {
     const originals = this._liveOriginals.get(nodeId);
     if (!originals) return undefined;
+    if (property === '_layoutEnabled') {
+      return originals.layoutEnabled;
+    }
     return isTransform ? originals.transform[property] : originals.layout[property];
   }
 
@@ -543,8 +548,12 @@ export class PropertyPanel {
     // Build reset values (original values for each changed property)
     const resetValues: Record<string, any> = {};
     for (const prop of Object.keys(changes)) {
-      const isTransform = isTransformProperty(prop);
-      resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
+      if (prop === '_layoutEnabled') {
+        resetValues[prop] = originals.layoutEnabled;
+      } else {
+        const isTransform = isTransformProperty(prop);
+        resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
+      }
     }
 
     // Remove from session changes
@@ -623,54 +632,122 @@ export class PropertyPanel {
     toggleRow.className = 'property-row toggle-row';
 
     const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'property-label';
     toggleLabel.textContent = 'Layout Enabled';
+
+    const toggleNodeId = this._selectedNode.id;
+    const toggleOriginals = this._liveOriginals.get(toggleNodeId);
+    const toggleChanges = this._sessionChanges.get(toggleNodeId) || {};
+    const originalLayoutEnabled = toggleOriginals?.layoutEnabled ?? false;
+
+    // Check if there's a session change for layoutEnabled
+    const sessionLayoutEnabled = toggleChanges['_layoutEnabled'];
+    const currentLayoutEnabled = sessionLayoutEnabled !== undefined
+      ? sessionLayoutEnabled
+      : this._selectedNode.layoutEnabled;
 
     const toggleCheckbox = document.createElement('input');
     toggleCheckbox.type = 'checkbox';
-    toggleCheckbox.checked = this._selectedNode.layoutEnabled;
-    toggleCheckbox.addEventListener('change', () => {
-      const nodeId = this._selectedNode!.id;
-      const enabling = toggleCheckbox.checked;
+    toggleCheckbox.checked = currentLayoutEnabled;
 
+    // Show original value indicator
+    const originalSpan = document.createElement('span');
+    originalSpan.className = 'property-original';
+    const updateOriginalDisplay = () => {
+      const hasChanged = toggleCheckbox.checked !== originalLayoutEnabled;
+      if (hasChanged) {
+        originalSpan.textContent = `was: ${originalLayoutEnabled ? 'on' : 'off'}`;
+        originalSpan.style.display = 'inline';
+        originalSpan.title = 'Click to reset';
+      } else {
+        originalSpan.style.display = 'none';
+      }
+    };
+    updateOriginalDisplay();
+
+    // Click original to reset
+    originalSpan.setAttribute('role', 'button');
+    originalSpan.setAttribute('tabindex', '0');
+    const resetToOriginal = () => {
+      toggleCheckbox.checked = originalLayoutEnabled;
+      updateOriginalDisplay();
+      // Trigger the change logic
+      applyLayoutEnabledChange(originalLayoutEnabled);
+    };
+    originalSpan.addEventListener('click', resetToOriginal);
+    originalSpan.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        resetToOriginal();
+      }
+    });
+
+    const applyLayoutEnabledChange = (enabling: boolean) => {
       if (enabling) {
-        this._onChange?.(nodeId, '_layoutEnabled', true);
+        this._onChange?.(toggleNodeId, '_layoutEnabled', true);
       } else {
         // When disabling layout:
         // 1. First nudge a transform value to dirty it (while layout still enabled)
         // 2. Then disable layout
         // 3. Then restore original transform values
-        // This workaround is needed because pixi/layout needs a dirtied transform
+        // TODO: This is a hacky workaround - pixi/layout needs a dirtied transform
+        // to properly release control. Find a proper solution later.
         const currentAlpha = this._selectedNode?.transform?.alpha ?? 1;
-        this._onChange?.(nodeId, 'alpha', currentAlpha + 0.0001);
+        this._onChange?.(toggleNodeId, 'alpha', currentAlpha + 0.0001);
 
         // Now disable layout
-        this._onChange?.(nodeId, '_layoutEnabled', false);
+        this._onChange?.(toggleNodeId, '_layoutEnabled', false);
 
         // Restore original transform values
-        const originals = this._liveOriginals.get(nodeId);
+        const originals = this._liveOriginals.get(toggleNodeId);
         if (originals?.transform) {
           const transformProps = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'alpha'];
           for (const prop of transformProps) {
             const originalValue = originals.transform[prop];
             if (originalValue !== undefined) {
-              this._onChange?.(nodeId, prop, originalValue);
+              this._onChange?.(toggleNodeId, prop, originalValue);
             }
           }
           // Handle anchor separately (only if container has anchor)
           if (this._selectedNode?.transform?.hasAnchor) {
             if (originals.transform.anchorX !== undefined) {
-              this._onChange?.(nodeId, 'anchorX', originals.transform.anchorX);
+              this._onChange?.(toggleNodeId, 'anchorX', originals.transform.anchorX);
             }
             if (originals.transform.anchorY !== undefined) {
-              this._onChange?.(nodeId, 'anchorY', originals.transform.anchorY);
+              this._onChange?.(toggleNodeId, 'anchorY', originals.transform.anchorY);
             }
           }
         }
       }
+
+      // Track session changes
+      if (!this._sessionChanges.has(toggleNodeId)) {
+        this._sessionChanges.set(toggleNodeId, {});
+      }
+      const changes = this._sessionChanges.get(toggleNodeId)!;
+
+      // Only store if different from original
+      if (enabling !== originalLayoutEnabled) {
+        changes['_layoutEnabled'] = enabling;
+        this._hasUnsavedChanges = true;
+      } else {
+        delete changes['_layoutEnabled'];
+        if (Object.keys(changes).length === 0) {
+          this._sessionChanges.delete(toggleNodeId);
+        }
+      }
+
+      this._onChangesUpdated?.();
+      updateOriginalDisplay();
+    };
+
+    toggleCheckbox.addEventListener('change', () => {
+      applyLayoutEnabledChange(toggleCheckbox.checked);
     });
 
     toggleRow.appendChild(toggleLabel);
     toggleRow.appendChild(toggleCheckbox);
+    toggleRow.appendChild(originalSpan);
     this._formContainer.appendChild(toggleRow);
 
     // Render sections

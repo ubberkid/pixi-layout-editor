@@ -102,6 +102,13 @@ propertyPanel.onCopy((nodeId) => {
 
 propertyPanel.onReset((nodeId, properties) => {
   for (const [property, value] of Object.entries(properties)) {
+    // Handle _layoutEnabled specially - needs alpha nudge when disabling
+    if (property === '_layoutEnabled' && value === false) {
+      // Get current alpha to nudge it
+      const node = treeView.getNodeById(nodeId);
+      const currentAlpha = node?.transform?.alpha ?? 1;
+      connection.send({ type: 'set-property', id: nodeId, property: 'alpha', value: currentAlpha + 0.0001 });
+    }
     connection.send({ type: 'set-property', id: nodeId, property, value });
   }
 });
