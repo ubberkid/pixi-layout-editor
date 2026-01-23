@@ -185,6 +185,12 @@ export class LayoutDebugBridge {
                 // Disable layout - set to false to opt-out
                 containerWithLayout.layout = false;
             }
+            // Force parent layout to recalculate since a child's participation changed
+            const parent = container.parent;
+            if (parent?.layout && typeof parent.layout === 'object') {
+                parent.layout.invalidateRoot?.();
+                parent.layout.forceUpdate?.();
+            }
             // Send updated state back
             this._channel?.postMessage({
                 type: "updated",

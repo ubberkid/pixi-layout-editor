@@ -202,7 +202,7 @@ export class LayoutDebugBridge {
 
 		// Handle special _layoutEnabled property
 		if (property === '_layoutEnabled') {
-			const containerWithLayout = container as Container & { layout?: unknown };
+			const containerWithLayout = container as Container & { layout?: { forceUpdate?: () => void; invalidateRoot?: () => void } | boolean };
 			if (value) {
 				// Enable layout - set layout to true to opt-in to layout system
 				// Per pixi/layout docs, this is equivalent to { width: 'intrinsic', height: 'intrinsic' }
@@ -210,6 +210,13 @@ export class LayoutDebugBridge {
 			} else {
 				// Disable layout - set to false to opt-out
 				containerWithLayout.layout = false;
+			}
+
+			// Force parent layout to recalculate since a child's participation changed
+			const parent = container.parent as Container & { layout?: { forceUpdate?: () => void; invalidateRoot?: () => void } } | null;
+			if (parent?.layout && typeof parent.layout === 'object') {
+				parent.layout.invalidateRoot?.();
+				parent.layout.forceUpdate?.();
 			}
 
 			// Send updated state back
