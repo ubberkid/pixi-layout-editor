@@ -1,7 +1,16 @@
 {
-  "name": "pixi-layout-editor-monorepo",
+  "name": "pixi-layout-editor",
   "version": "0.1.0",
-  "private": true,
+  "description": "Visual editor for @pixi/layout properties with real-time debugging",
+  "type": "module",
+  "main": "./bridge/dist/index.js",
+  "types": "./bridge/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./bridge/dist/index.js",
+      "types": "./bridge/dist/index.d.ts"
+    }
+  },
   "workspaces": [
     "bridge",
     "editor"
@@ -11,5 +20,22 @@
     "build": "npm run build --workspace=bridge && npm run build --workspace=editor",
     "build:bridge": "npm run build --workspace=bridge",
     "build:editor": "npm run build --workspace=editor"
-  }
+  },
+  "peerDependencies": {
+    "pixi.js": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ubberkid/pixi-layout-editor"
+  },
+  "keywords": [
+    "pixijs",
+    "pixi",
+    "layout",
+    "editor",
+    "debug",
+    "flexbox"
+  ],
+  "author": "ubberkid",
+  "license": "MIT"
 }
