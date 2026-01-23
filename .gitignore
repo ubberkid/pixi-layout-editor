@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output (keep bridge/dist for npm package)
+editor/dist/
 *.tsbuildinfo
 
 # Editor
