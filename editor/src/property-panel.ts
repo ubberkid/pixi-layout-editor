@@ -592,9 +592,10 @@ export class PropertyPanel {
     this._formContainer.appendChild(toggleRow);
 
     // Render sections
-    const liveOriginals = this._liveOriginals.get(this._selectedNode.id);
-    const originalLayout = liveOriginals?.layout || {};
-    const originalTransform = liveOriginals?.transform || {};
+    const nodeOriginals = this._liveOriginals.get(this._selectedNode.id);
+    const originalLayout = nodeOriginals?.layout || {};
+    const originalTransform = nodeOriginals?.transform || {};
+    const nodeChanges = this._sessionChanges.get(this._selectedNode.id) || {};
 
     for (const section of PROPERTY_SECTIONS) {
       const sectionEl = document.createElement('div');
@@ -650,12 +651,15 @@ export class PropertyPanel {
         let currentValue: any;
         let originalValue: any;
 
+        // Check session changes first, then fall back to live node value
+        const sessionValue = nodeChanges[prop.key];
+
         if (section.isTransform) {
           const transformKey = prop.key as keyof ContainerNode['transform'];
-          currentValue = this._selectedNode.transform?.[transformKey];
+          currentValue = sessionValue !== undefined ? sessionValue : this._selectedNode.transform?.[transformKey];
           originalValue = originalTransform[prop.key];
         } else {
-          currentValue = this._selectedNode.layout?.[prop.key];
+          currentValue = sessionValue !== undefined ? sessionValue : this._selectedNode.layout?.[prop.key];
           originalValue = originalLayout[prop.key];
         }
 
@@ -718,17 +722,16 @@ export class PropertyPanel {
           if (!this._sessionChanges.has(nodeId)) {
             this._sessionChanges.set(nodeId, {});
           }
-          const nodeChanges = this._sessionChanges.get(nodeId)!;
+          const changes = this._sessionChanges.get(nodeId)!;
 
           // Only store if different from original
-          const origStore = section.isTransform ? originalTransform : originalLayout;
-          const origVal = origStore[prop.key];
+          const origVal = section.isTransform ? originalTransform[prop.key] : originalLayout[prop.key];
           if (value !== origVal) {
-            nodeChanges[prop.key] = value;
+            changes[prop.key] = value;
             this._hasUnsavedChanges = true;
           } else {
-            delete nodeChanges[prop.key];
-            if (Object.keys(nodeChanges).length === 0) {
+            delete changes[prop.key];
+            if (Object.keys(changes).length === 0) {
               this._sessionChanges.delete(nodeId);
             }
           }
