@@ -2,6 +2,8 @@
 
 A visual editor for inspecting and editing [@pixi/layout](https://github.com/pixijs/layout) properties in real-time.
 
+> **Note:** This project was completely vibe coded with [Claude Code](https://claude.ai/code).
+
 ## Features
 
 - **Live Container Tree**: View your PixiJS container hierarchy
