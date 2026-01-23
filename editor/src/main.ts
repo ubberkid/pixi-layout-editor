@@ -52,6 +52,13 @@ const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
     console.log(`[Layout Editor] Applying ${changes.size} node changes...`);
     for (const [nodeId, nodeChanges] of changes) {
       for (const [property, value] of Object.entries(nodeChanges)) {
+        // Handle _layoutEnabled specially - needs alpha nudge when disabling
+        // TODO: This is a hacky workaround - find proper solution later
+        if (property === '_layoutEnabled' && value === false) {
+          const node = treeView.getNodeById(nodeId);
+          const currentAlpha = node?.transform?.alpha ?? 1;
+          connection.send({ type: 'set-property', id: nodeId, property: 'alpha', value: currentAlpha + 0.0001 });
+        }
         connection.send({ type: 'set-property', id: nodeId, property, value });
       }
     }

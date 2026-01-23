@@ -420,11 +420,16 @@ export class PropertyPanel {
         const originals = this._liveOriginals.get(nodeId);
 
         for (const [prop, value] of Object.entries(nodeChanges)) {
-          // Determine if this is a transform property
-          const isTransform = isTransformProperty(prop);
-          const originalValue = originals
-            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
-            : undefined;
+          // Determine original value based on property type
+          let originalValue: any;
+          if (prop === '_layoutEnabled') {
+            originalValue = originals?.layoutEnabled;
+          } else {
+            const isTransform = isTransformProperty(prop);
+            originalValue = originals
+              ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+              : undefined;
+          }
 
           // Only save if different from live original
           if (value !== originalValue) {
@@ -473,10 +478,16 @@ export class PropertyPanel {
         const originals = this._liveOriginals.get(nodeId);
 
         for (const [prop, value] of Object.entries(nodeChanges)) {
-          const isTransform = isTransformProperty(prop);
-          const originalValue = originals
-            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
-            : undefined;
+          // Determine original value based on property type
+          let originalValue: any;
+          if (prop === '_layoutEnabled') {
+            originalValue = originals?.layoutEnabled;
+          } else {
+            const isTransform = isTransformProperty(prop);
+            originalValue = originals
+              ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+              : undefined;
+          }
 
           // Only keep if different from live original
           if (value !== originalValue) {
