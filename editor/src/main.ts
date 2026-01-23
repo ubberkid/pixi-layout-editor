@@ -9,7 +9,6 @@ const connectionDropdownBtn = document.getElementById('connection-dropdown-btn')
 const connectionDropdownMenu = document.getElementById('connection-dropdown-menu')!;
 const sessionDropdown = document.getElementById('session-dropdown')!;
 const sessionDropdownBtn = document.getElementById('session-dropdown-btn')! as HTMLButtonElement;
-const sessionDropdownMenu = document.getElementById('session-dropdown-menu')!;
 const sessionList = document.getElementById('session-list')!;
 const sessionCreate = document.getElementById('session-create')!;
 const saveSessionBtn = document.getElementById('save-session-btn')! as HTMLButtonElement;
@@ -145,19 +144,6 @@ connectionDropdownBtn.addEventListener('click', () => {
 
 // Initial state
 updateConnectionDropdown(false);
-
-// Reapply button
-reapplyBtn.addEventListener('click', () => {
-  applyPendingChanges();
-});
-
-// Clear button
-clearBtn.addEventListener('click', () => {
-  if (confirm('Clear all pending changes?')) {
-    propertyPanel.clearPendingChanges();
-    updatePendingDisplay();
-  }
-});
 
 // Handle hierarchy updates
 connection.on('hierarchy', (msg) => {

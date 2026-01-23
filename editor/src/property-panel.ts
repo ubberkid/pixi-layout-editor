@@ -317,7 +317,6 @@ export class PropertyPanel {
   private _pendingChanges: Map<string, Record<string, any>> = new Map();
   private _onChange: PropertyChangeHandler | null = null;
   private _onCopy: CopyHandler | null = null;
-  private _onReapply: (() => void) | null = null;
 
   constructor(formId: string, noSelectionId: string) {
     this._formContainer = document.getElementById(formId)!;
@@ -381,10 +380,6 @@ export class PropertyPanel {
     localStorage.removeItem(ORIGINALS_KEY);
     localStorage.removeItem(TRANSFORMS_KEY);
     this.render();
-  }
-
-  onReapply(handler: () => void): void {
-    this._onReapply = handler;
   }
 
   // Session management
