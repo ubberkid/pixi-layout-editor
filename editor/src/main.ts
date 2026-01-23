@@ -211,6 +211,23 @@ const updateConnectionDropdown = (connected: boolean) => {
     refreshItem.className = 'dropdown-item';
     refreshItem.textContent = 'Refresh';
     refreshItem.addEventListener('click', () => {
+      // Reset to originals first
+      const resetValues = propertyPanel.getAllResetValues();
+      applySessionChanges(resetValues);
+
+      // Re-apply current session if one is loaded
+      if (currentSessionName) {
+        const result = propertyPanel.loadSession(currentSessionName);
+        if (result) {
+          applySessionChanges(result.changes);
+        }
+      } else {
+        // No session - just clear the in-memory changes
+        propertyPanel.getSessionChanges().clear();
+        treeView.setChangedNodes(propertyPanel.getChangedNodeIds());
+      }
+
+      // Also refresh hierarchy from game
       connection.send({ type: 'get-hierarchy' });
       connectionDropdown.classList.remove('open');
     });
