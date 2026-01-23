@@ -549,6 +549,35 @@ export class PropertyPanel {
     this._onReset = handler;
   }
 
+  /**
+   * Get reset values for all current session changes (to restore to originals).
+   * Used when switching sessions to clear current state before applying new session.
+   */
+  getAllResetValues(): Map<string, Record<string, any>> {
+    const allResets = new Map<string, Record<string, any>>();
+
+    for (const [nodeId, changes] of this._sessionChanges) {
+      const originals = this._liveOriginals.get(nodeId);
+      if (!originals) continue;
+
+      const resetValues: Record<string, any> = {};
+      for (const prop of Object.keys(changes)) {
+        if (prop === '_layoutEnabled') {
+          resetValues[prop] = originals.layoutEnabled;
+        } else {
+          const isTransform = isTransformProperty(prop);
+          resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
+        }
+      }
+
+      if (Object.keys(resetValues).length > 0) {
+        allResets.set(nodeId, resetValues);
+      }
+    }
+
+    return allResets;
+  }
+
   resetNode(nodeId: string): void {
     const originals = this._liveOriginals.get(nodeId);
     if (!originals) return;

@@ -346,6 +346,10 @@ const updateSessionList = () => {
         propertyPanel.saveSession(currentSessionName);
       }
 
+      // Reset current changes to originals before loading new session
+      const resetValues = propertyPanel.getAllResetValues();
+      applySessionChanges(resetValues);
+
       const result = propertyPanel.loadSession(name);
       if (result) {
         currentSessionName = name;
