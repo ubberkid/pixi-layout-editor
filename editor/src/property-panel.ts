@@ -632,31 +632,36 @@ export class PropertyPanel {
       const nodeId = this._selectedNode!.id;
       const enabling = toggleCheckbox.checked;
 
-      // Send the layout enabled change
-      this._onChange?.(nodeId, '_layoutEnabled', enabling);
-
-      // When disabling layout, restore original transform values
-      // so the container returns to its pre-layout position
-      if (!enabling) {
+      if (enabling) {
+        // Just send the layout enabled change
+        this._onChange?.(nodeId, '_layoutEnabled', true);
+      } else {
+        // When disabling, bundle original transform values with the message
+        // so the bridge can apply them atomically after disabling layout
         const originals = this._liveOriginals.get(nodeId);
+        const restoreTransform: Record<string, number> = {};
+
         if (originals?.transform) {
           const transformProps = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'alpha'];
           for (const prop of transformProps) {
             const originalValue = originals.transform[prop];
             if (originalValue !== undefined) {
-              this._onChange?.(nodeId, prop, originalValue);
+              restoreTransform[prop] = originalValue;
             }
           }
           // Handle anchor separately (only if container has anchor)
           if (this._selectedNode?.transform?.hasAnchor) {
             if (originals.transform.anchorX !== undefined) {
-              this._onChange?.(nodeId, 'anchorX', originals.transform.anchorX);
+              restoreTransform.anchorX = originals.transform.anchorX;
             }
             if (originals.transform.anchorY !== undefined) {
-              this._onChange?.(nodeId, 'anchorY', originals.transform.anchorY);
+              restoreTransform.anchorY = originals.transform.anchorY;
             }
           }
         }
+
+        // Send with restore transform data
+        this._onChange?.(nodeId, '_layoutEnabled', { enabled: false, restoreTransform });
       }
     });
 

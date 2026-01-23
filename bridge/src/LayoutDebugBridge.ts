@@ -203,13 +203,36 @@ export class LayoutDebugBridge {
 		// Handle special _layoutEnabled property
 		if (property === '_layoutEnabled') {
 			const containerWithLayout = container as Container & { layout?: { forceUpdate?: () => void; invalidateRoot?: () => void } | boolean };
-			if (value) {
+
+			// Value can be true, or { enabled: false, restoreTransform: {...} }
+			const enabling = value === true;
+			const disableData = typeof value === 'object' && value !== null ? value as { enabled: boolean; restoreTransform?: Record<string, number> } : null;
+
+			if (enabling) {
 				// Enable layout - set layout to true to opt-in to layout system
-				// Per pixi/layout docs, this is equivalent to { width: 'intrinsic', height: 'intrinsic' }
 				containerWithLayout.layout = true;
 			} else {
 				// Disable layout - set to false to opt-out
 				containerWithLayout.layout = false;
+
+				// Apply restored transform values if provided
+				if (disableData?.restoreTransform) {
+					const transform = disableData.restoreTransform;
+					if (transform.x !== undefined) container.x = transform.x;
+					if (transform.y !== undefined) container.y = transform.y;
+					if (transform.scaleX !== undefined) container.scale.x = transform.scaleX;
+					if (transform.scaleY !== undefined) container.scale.y = transform.scaleY;
+					if (transform.rotation !== undefined) container.rotation = transform.rotation;
+					if (transform.pivotX !== undefined) container.pivot.x = transform.pivotX;
+					if (transform.pivotY !== undefined) container.pivot.y = transform.pivotY;
+					if (transform.alpha !== undefined) container.alpha = transform.alpha;
+					if (transform.anchorX !== undefined && "anchor" in container) {
+						(container as Container & { anchor: { x: number } }).anchor.x = transform.anchorX;
+					}
+					if (transform.anchorY !== undefined && "anchor" in container) {
+						(container as Container & { anchor: { y: number } }).anchor.y = transform.anchorY;
+					}
+				}
 			}
 
 			// Force parent layout to recalculate since a child's participation changed
@@ -224,7 +247,7 @@ export class LayoutDebugBridge {
 				type: "updated",
 				id,
 				layout: this.extractLayout(container),
-				layoutEnabled: !!value,
+				layoutEnabled: enabling,
 				transform: this.extractTransform(container),
 			});
 			return;
