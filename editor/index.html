@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Layout Editor</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="connection-bar">
+        <div id="connection-dropdown" class="dropdown">
+          <button id="connection-dropdown-btn" class="dropdown-btn disconnected">Disconnected</button>
+          <div id="connection-dropdown-menu" class="dropdown-menu"></div>
+        </div>
+        <span class="spacer"></span>
+        <div id="session-dropdown" class="dropdown">
+          <button id="session-dropdown-btn" class="dropdown-btn">Select Session</button>
+          <div id="session-dropdown-menu" class="dropdown-menu">
+            <div id="session-list"></div>
+            <div id="session-create" class="dropdown-item create-item">+ Create New</div>
+          </div>
+        </div>
+        <button id="save-session-btn">Save</button>
+        <label id="autosave-label"><input type="checkbox" id="autosave-checkbox" /> Auto Save</label>
+      </header>
+      <main id="content">
+        <aside id="tree-panel">
+          <h2>Containers</h2>
+          <div id="tree-view"></div>
+        </aside>
+        <section id="property-panel">
+          <h2>Properties</h2>
+          <div id="no-selection">Select a container</div>
+          <div id="property-form" style="display: none;"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

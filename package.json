@@ -1,0 +1,15 @@
+{
+  "name": "pixi-layout-editor-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "bridge",
+    "editor"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=editor",
+    "build": "npm run build --workspace=bridge && npm run build --workspace=editor",
+    "build:bridge": "npm run build --workspace=bridge",
+    "build:editor": "npm run build --workspace=editor"
+  }
+}

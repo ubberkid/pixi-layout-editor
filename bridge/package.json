@@ -1,0 +1,46 @@
+{
+  "name": "pixi-layout-editor",
+  "version": "0.1.0",
+  "description": "Debug bridge for PixiJS layout editor - inspect and edit @pixi/layout properties in real-time",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "pixi",
+    "pixijs",
+    "pixi-layout",
+    "layout",
+    "editor",
+    "debug",
+    "flexbox"
+  ],
+  "author": "ubberkid",
+  "license": "MIT",
+  "peerDependencies": {
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "pixi.js": "^8.6.6",
+    "typescript": "^5.6.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ubberkid/pixi-layout-editor"
+  },
+  "homepage": "https://github.com/ubberkid/pixi-layout-editor#readme"
+}
