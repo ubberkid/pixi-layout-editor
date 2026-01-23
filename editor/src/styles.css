@@ -55,9 +55,7 @@ body {
 }
 
 /* Session controls - hidden by default until connected */
-#session-dropdown,
-#save-session-btn,
-#autosave-label {
+#session-dropdown {
   display: none;
 }
 
@@ -153,18 +151,6 @@ body {
 
 .dropdown-item.create-item:hover {
   background-color: #1e3a1e;
-}
-
-#autosave-label {
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #d4d4d4;
-  cursor: pointer;
-}
-
-#autosave-checkbox {
-  cursor: pointer;
 }
 
 #new-session-btn {

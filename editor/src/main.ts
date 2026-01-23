@@ -11,9 +11,6 @@ const sessionDropdown = document.getElementById('session-dropdown')!;
 const sessionDropdownBtn = document.getElementById('session-dropdown-btn')! as HTMLButtonElement;
 const sessionList = document.getElementById('session-list')!;
 const sessionCreate = document.getElementById('session-create')!;
-const saveSessionBtn = document.getElementById('save-session-btn')! as HTMLButtonElement;
-const autosaveLabel = document.getElementById('autosave-label')!;
-const autosaveCheckbox = document.getElementById('autosave-checkbox')! as HTMLInputElement;
 const viewChangesBtn = document.getElementById('view-changes-btn')!;
 const changesModal = document.getElementById('changes-modal')!;
 const changesList = document.getElementById('changes-list')!;
@@ -23,22 +20,6 @@ const resetAllBtn = document.getElementById('reset-all-btn')!;
 // Track current session
 let currentSessionName: string | null = null;
 let originalsCaptured = false;
-
-// Load autosave preference
-const AUTOSAVE_KEY = 'layout-editor-autosave';
-autosaveCheckbox.checked = localStorage.getItem(AUTOSAVE_KEY) === 'true';
-
-const updateSaveButton = () => {
-  saveSessionBtn.disabled = !connection.isConnected || autosaveCheckbox.checked;
-};
-
-autosaveCheckbox.addEventListener('change', () => {
-  localStorage.setItem(AUTOSAVE_KEY, String(autosaveCheckbox.checked));
-  updateSaveButton();
-});
-
-// Initial state
-updateSaveButton();
 
 // Tree view
 const treeView = new TreeView('tree-view');
@@ -68,12 +49,7 @@ const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
 // Update session controls based on connection state
 const updateSessionControls = (connected: boolean) => {
   sessionDropdown.style.display = connected ? 'block' : 'none';
-  saveSessionBtn.style.display = connected ? 'inline-block' : 'none';
-  autosaveLabel.style.display = connected ? 'flex' : 'none';
   viewChangesBtn.style.display = connected ? 'inline-block' : 'none';
-  if (connected) {
-    updateSaveButton();
-  }
 };
 
 // Tree view handlers
@@ -93,8 +69,8 @@ treeView.onHover((nodeId) => {
 propertyPanel.onChange((nodeId, property, value) => {
   connection.send({ type: 'set-property', id: nodeId, property, value });
 
-  // Auto-save to current session if enabled
-  if (autosaveCheckbox.checked && currentSessionName) {
+  // Auto-save to current session
+  if (currentSessionName) {
     propertyPanel.saveSession(currentSessionName);
   }
 });
@@ -351,15 +327,8 @@ const updateSessionList = () => {
     item.appendChild(deleteBtn);
 
     item.addEventListener('click', async () => {
-      // Check for unsaved changes
-      if (propertyPanel.hasUnsavedChanges() && !autosaveCheckbox.checked && currentSessionName) {
-        const response = confirm(`Save changes to "${currentSessionName}" before switching?`);
-        if (response) {
-          propertyPanel.saveSession(currentSessionName);
-        }
-        // If they click Cancel on confirm, we still switch (no way to cancel switch with confirm())
-      } else if (autosaveCheckbox.checked && currentSessionName) {
-        // Auto-save before switching
+      // Auto-save current session before switching
+      if (currentSessionName) {
         propertyPanel.saveSession(currentSessionName);
       }
 
@@ -407,21 +376,6 @@ sessionCreate.addEventListener('click', () => {
     sessionDropdownBtn.textContent = name.trim();
     sessionDropdown.classList.remove('open');
     updateSessionList();
-  }
-});
-
-saveSessionBtn.addEventListener('click', () => {
-  if (currentSessionName) {
-    propertyPanel.saveSession(currentSessionName);
-    console.log(`[Layout Editor] Saved to session: ${currentSessionName}`);
-  } else {
-    const name = prompt('No session loaded. Create new session:');
-    if (name && name.trim()) {
-      propertyPanel.saveSession(name.trim());
-      currentSessionName = name.trim();
-      sessionDropdownBtn.textContent = name.trim();
-      updateSessionList();
-    }
   }
 });
 
