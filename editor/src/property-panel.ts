@@ -574,9 +574,13 @@ export class PropertyPanel {
         this._selectedNode.transform = transform as ContainerNode['transform'];
       }
       if (layoutEnabled !== undefined) {
+        const needsRerender = this._selectedNode.layoutEnabled !== layoutEnabled;
         this._selectedNode.layoutEnabled = layoutEnabled;
+        // Re-render when layoutEnabled changes since we need to update the checkbox
+        if (needsRerender) {
+          this.render();
+        }
       }
-      // Don't re-render to avoid losing focus, just update values
     }
   }
 
@@ -625,7 +629,35 @@ export class PropertyPanel {
     toggleCheckbox.type = 'checkbox';
     toggleCheckbox.checked = this._selectedNode.layoutEnabled;
     toggleCheckbox.addEventListener('change', () => {
-      this._onChange?.(this._selectedNode!.id, '_layoutEnabled', toggleCheckbox.checked);
+      const nodeId = this._selectedNode!.id;
+      const enabling = toggleCheckbox.checked;
+
+      // Send the layout enabled change
+      this._onChange?.(nodeId, '_layoutEnabled', enabling);
+
+      // When disabling layout, restore original transform values
+      // so the container returns to its pre-layout position
+      if (!enabling) {
+        const originals = this._liveOriginals.get(nodeId);
+        if (originals?.transform) {
+          const transformProps = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'alpha'];
+          for (const prop of transformProps) {
+            const originalValue = originals.transform[prop];
+            if (originalValue !== undefined) {
+              this._onChange?.(nodeId, prop, originalValue);
+            }
+          }
+          // Handle anchor separately (only if container has anchor)
+          if (this._selectedNode?.transform?.hasAnchor) {
+            if (originals.transform.anchorX !== undefined) {
+              this._onChange?.(nodeId, 'anchorX', originals.transform.anchorX);
+            }
+            if (originals.transform.anchorY !== undefined) {
+              this._onChange?.(nodeId, 'anchorY', originals.transform.anchorY);
+            }
+          }
+        }
+      }
     });
 
     toggleRow.appendChild(toggleLabel);
