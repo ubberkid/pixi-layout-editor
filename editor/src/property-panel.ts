@@ -321,6 +321,12 @@ export class PropertyPanel {
   constructor(formId: string, noSelectionId: string) {
     this._formContainer = document.getElementById(formId)!;
     this._noSelectionEl = document.getElementById(noSelectionId)!;
+
+    // Migration: clear old localStorage keys from previous implementation
+    localStorage.removeItem('layout-editor-changes');
+    localStorage.removeItem('layout-editor-originals');
+    localStorage.removeItem('layout-editor-transforms');
+
     this.loadFromStorage();
   }
 
