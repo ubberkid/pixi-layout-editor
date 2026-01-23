@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Layout Editor</title>
-    <script type="module" crossorigin src="./assets/index-CVA1CzbA.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CcH54qEl.css">
+    <script type="module" crossorigin src="./assets/index-CLFs_ZHJ.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B9DwFQxU.css">
   </head>
   <body>
     <div id="app">
@@ -24,6 +24,7 @@
         </div>
         <button id="save-session-btn">Save</button>
         <label id="autosave-label"><input type="checkbox" id="autosave-checkbox" /> Auto Save</label>
+        <button id="view-changes-btn" style="display: none;">View Changes</button>
       </header>
       <main id="content">
         <aside id="tree-panel">
@@ -36,6 +37,18 @@
           <div id="property-form" style="display: none;"></div>
         </section>
       </main>
+      <div id="changes-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>All Changes</h3>
+            <button id="close-modal-btn" class="modal-close">&times;</button>
+          </div>
+          <div id="changes-list" class="modal-body"></div>
+          <div class="modal-footer">
+            <button id="reset-all-btn">Reset All</button>
+          </div>
+        </div>
+      </div>
     </div>
   </body>
 </html>

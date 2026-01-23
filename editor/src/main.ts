@@ -14,6 +14,11 @@ const sessionCreate = document.getElementById('session-create')!;
 const saveSessionBtn = document.getElementById('save-session-btn')! as HTMLButtonElement;
 const autosaveLabel = document.getElementById('autosave-label')!;
 const autosaveCheckbox = document.getElementById('autosave-checkbox')! as HTMLInputElement;
+const viewChangesBtn = document.getElementById('view-changes-btn')!;
+const changesModal = document.getElementById('changes-modal')!;
+const changesList = document.getElementById('changes-list')!;
+const closeModalBtn = document.getElementById('close-modal-btn')!;
+const resetAllBtn = document.getElementById('reset-all-btn')!;
 
 // Track current session
 let currentSessionName: string | null = null;
@@ -58,6 +63,7 @@ const updateSessionControls = (connected: boolean) => {
   sessionDropdown.style.display = connected ? 'block' : 'none';
   saveSessionBtn.style.display = connected ? 'inline-block' : 'none';
   autosaveLabel.style.display = connected ? 'flex' : 'none';
+  viewChangesBtn.style.display = connected ? 'inline-block' : 'none';
   if (connected) {
     updateSaveButton();
   }
@@ -100,6 +106,77 @@ propertyPanel.onReset((nodeId, properties) => {
   }
 });
 
+// View Changes modal
+const renderChangesModal = () => {
+  changesList.innerHTML = '';
+  const changes = propertyPanel.getSessionChanges();
+
+  if (changes.size === 0) {
+    changesList.innerHTML = '<p style="color: #808080;">No changes</p>';
+    return;
+  }
+
+  for (const [nodeId, nodeChanges] of changes) {
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'change-node';
+
+    const header = document.createElement('div');
+    header.className = 'change-node-header';
+    header.textContent = nodeId;
+    header.addEventListener('click', () => {
+      // Select node in tree
+      const node = treeView.getNodeById(nodeId);
+      if (node) {
+        propertyPanel.setSelectedNode(node);
+        treeView.selectNodeById(nodeId);
+      }
+      changesModal.style.display = 'none';
+    });
+    nodeDiv.appendChild(header);
+
+    for (const [prop, value] of Object.entries(nodeChanges)) {
+      const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+      const original = propertyPanel.getOriginalValue(nodeId, prop, isTransform);
+
+      const item = document.createElement('div');
+      item.className = 'change-item';
+      item.innerHTML = `
+        <span class="change-prop">${prop}:</span>
+        <span class="change-old">${original ?? '(not set)'}</span>
+        <span class="change-arrow">→</span>
+        <span class="change-new">${value ?? '(not set)'}</span>
+      `;
+      nodeDiv.appendChild(item);
+    }
+
+    changesList.appendChild(nodeDiv);
+  }
+};
+
+viewChangesBtn.addEventListener('click', () => {
+  renderChangesModal();
+  changesModal.style.display = 'flex';
+});
+
+closeModalBtn.addEventListener('click', () => {
+  changesModal.style.display = 'none';
+});
+
+changesModal.addEventListener('click', (e) => {
+  if (e.target === changesModal) {
+    changesModal.style.display = 'none';
+  }
+});
+
+resetAllBtn.addEventListener('click', () => {
+  if (confirm('Reset all changes?')) {
+    const changes = propertyPanel.getSessionChanges();
+    for (const [nodeId] of changes) {
+      propertyPanel.resetNode(nodeId);
+    }
+    changesModal.style.display = 'none';
+  }
+});
 
 // Connection dropdown
 const updateConnectionDropdown = (connected: boolean) => {
