@@ -543,8 +543,6 @@ export class PropertyPanel {
 
   setSelectedNode(node: ContainerNode | null): void {
     this._selectedNode = node;
-    // Original values are now captured via captureLiveOriginals() on hierarchy receive
-    // No longer captured here on first node selection
     this.render();
   }
 
