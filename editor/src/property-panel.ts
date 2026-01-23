@@ -694,6 +694,27 @@ export class PropertyPanel {
     });
 
     const applyLayoutEnabledChange = (enabling: boolean) => {
+      // Track session changes FIRST (before _onChange triggers autosave)
+      if (!this._sessionChanges.has(toggleNodeId)) {
+        this._sessionChanges.set(toggleNodeId, {});
+      }
+      const changes = this._sessionChanges.get(toggleNodeId)!;
+
+      // Only store if different from original
+      if (enabling !== originalLayoutEnabled) {
+        changes['_layoutEnabled'] = enabling;
+        this._hasUnsavedChanges = true;
+      } else {
+        delete changes['_layoutEnabled'];
+        if (Object.keys(changes).length === 0) {
+          this._sessionChanges.delete(toggleNodeId);
+        }
+      }
+
+      this._onChangesUpdated?.();
+      updateOriginalDisplay();
+
+      // Now send changes to game (which may trigger autosave)
       if (enabling) {
         this._onChange?.(toggleNodeId, '_layoutEnabled', true);
       } else {
@@ -730,26 +751,6 @@ export class PropertyPanel {
           }
         }
       }
-
-      // Track session changes
-      if (!this._sessionChanges.has(toggleNodeId)) {
-        this._sessionChanges.set(toggleNodeId, {});
-      }
-      const changes = this._sessionChanges.get(toggleNodeId)!;
-
-      // Only store if different from original
-      if (enabling !== originalLayoutEnabled) {
-        changes['_layoutEnabled'] = enabling;
-        this._hasUnsavedChanges = true;
-      } else {
-        delete changes['_layoutEnabled'];
-        if (Object.keys(changes).length === 0) {
-          this._sessionChanges.delete(toggleNodeId);
-        }
-      }
-
-      this._onChangesUpdated?.();
-      updateOriginalDisplay();
     };
 
     toggleCheckbox.addEventListener('change', () => {
