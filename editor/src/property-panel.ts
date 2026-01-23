@@ -297,24 +297,33 @@ const PROPERTY_SECTIONS: PropertySection[] = [
   },
 ];
 
-const STORAGE_KEY = 'layout-editor-changes';
-const ORIGINALS_KEY = 'layout-editor-originals';
-const TRANSFORMS_KEY = 'layout-editor-transforms';
 const SESSIONS_KEY = 'layout-editor-sessions';
+// @ts-expect-error - Used in later tasks for session switching
+const _CURRENT_SESSION_KEY = 'layout-editor-current-session';
 
 interface SessionData {
   changes: Record<string, Record<string, any>>;
-  originals: Record<string, Record<string, any>>;
-  transforms: Record<string, Record<string, any>>;
+}
+
+interface LiveOriginals {
+  layout: Record<string, any>;
+  transform: Record<string, any>;
 }
 
 export class PropertyPanel {
   private _formContainer: HTMLElement;
   private _noSelectionEl: HTMLElement;
   private _selectedNode: ContainerNode | null = null;
-  private _originalLayouts: Map<string, Record<string, any>> = new Map();
-  private _originalTransforms: Map<string, Record<string, any>> = new Map();
-  private _pendingChanges: Map<string, Record<string, any>> = new Map();
+
+  // In-memory only - captured from game on hierarchy receive
+  private _liveOriginals: Map<string, LiveOriginals> = new Map();
+
+  // Current session's changes (from loaded session or user edits)
+  private _sessionChanges: Map<string, Record<string, any>> = new Map();
+
+  // Track if we have unsaved changes since last session save
+  private _hasUnsavedChanges: boolean = false;
+
   private _onChange: PropertyChangeHandler | null = null;
   private _onCopy: CopyHandler | null = null;
 
@@ -331,60 +340,25 @@ export class PropertyPanel {
   }
 
   private loadFromStorage(): void {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        this._pendingChanges = new Map(Object.entries(data));
-        console.log(`[PropertyPanel] Loaded ${this._pendingChanges.size} nodes with pending changes`);
-      }
-
-      const originals = localStorage.getItem(ORIGINALS_KEY);
-      if (originals) {
-        const data = JSON.parse(originals);
-        this._originalLayouts = new Map(Object.entries(data));
-      }
-
-      const transforms = localStorage.getItem(TRANSFORMS_KEY);
-      if (transforms) {
-        const data = JSON.parse(transforms);
-        this._originalTransforms = new Map(Object.entries(data));
-      }
-    } catch (e) {
-      console.warn('[PropertyPanel] Failed to load from storage:', e);
-    }
+    // Only load current session name - actual session data loaded on demand
+    // liveOriginals are NOT loaded - they come from game on connect
   }
 
-  private saveToStorage(): void {
-    try {
-      const data = Object.fromEntries(this._pendingChanges);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-      const originals = Object.fromEntries(this._originalLayouts);
-      localStorage.setItem(ORIGINALS_KEY, JSON.stringify(originals));
-
-      const transforms = Object.fromEntries(this._originalTransforms);
-      localStorage.setItem(TRANSFORMS_KEY, JSON.stringify(transforms));
-    } catch (e) {
-      console.warn('[PropertyPanel] Failed to save to storage:', e);
-    }
+  getSessionChanges(): Map<string, Record<string, any>> {
+    return this._sessionChanges;
   }
 
-  getPendingChanges(): Map<string, Record<string, any>> {
-    return this._pendingChanges;
+  hasUnsavedChanges(): boolean {
+    return this._hasUnsavedChanges;
   }
 
   hasPendingChanges(): boolean {
-    return this._pendingChanges.size > 0;
+    return this._sessionChanges.size > 0;
   }
 
-  clearPendingChanges(): void {
-    this._pendingChanges.clear();
-    this._originalLayouts.clear();
-    this._originalTransforms.clear();
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(ORIGINALS_KEY);
-    localStorage.removeItem(TRANSFORMS_KEY);
+  clearSessionChanges(): void {
+    this._sessionChanges.clear();
+    this._hasUnsavedChanges = false;
     this.render();
   }
 
@@ -400,11 +374,9 @@ export class PropertyPanel {
 
   saveSession(name: string): void {
     try {
-      // Save current state to session
+      // Save only changes to session (originals come from live game)
       const sessionData: SessionData = {
-        changes: Object.fromEntries(this._pendingChanges),
-        originals: Object.fromEntries(this._originalLayouts),
-        transforms: Object.fromEntries(this._originalTransforms),
+        changes: Object.fromEntries(this._sessionChanges),
       };
       localStorage.setItem(`layout-editor-session-${name}`, JSON.stringify(sessionData));
 
@@ -415,6 +387,7 @@ export class PropertyPanel {
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
       }
 
+      this._hasUnsavedChanges = false;
       console.log(`[PropertyPanel] Saved session: ${name}`);
     } catch (e) {
       console.warn('[PropertyPanel] Failed to save session:', e);
@@ -427,12 +400,8 @@ export class PropertyPanel {
       if (!saved) return false;
 
       const sessionData: SessionData = JSON.parse(saved);
-      this._pendingChanges = new Map(Object.entries(sessionData.changes));
-      this._originalLayouts = new Map(Object.entries(sessionData.originals));
-      this._originalTransforms = new Map(Object.entries(sessionData.transforms || {}));
-
-      // Also save as current working state
-      this.saveToStorage();
+      this._sessionChanges = new Map(Object.entries(sessionData.changes));
+      this._hasUnsavedChanges = false;
 
       console.log(`[PropertyPanel] Loaded session: ${name}`);
       this.render();
@@ -466,16 +435,8 @@ export class PropertyPanel {
 
   setSelectedNode(node: ContainerNode | null): void {
     this._selectedNode = node;
-    // Store original values only the first time we see this node
-    if (node) {
-      if (!this._originalLayouts.has(node.id)) {
-        this._originalLayouts.set(node.id, node.layout ? { ...node.layout } : {});
-      }
-      if (!this._originalTransforms.has(node.id)) {
-        this._originalTransforms.set(node.id, node.transform ? { ...node.transform } : {});
-      }
-      this.saveToStorage();
-    }
+    // Original values are now captured via captureLiveOriginals() on hierarchy receive
+    // No longer captured here on first node selection
     this.render();
   }
 
@@ -525,8 +486,9 @@ export class PropertyPanel {
     this._formContainer.appendChild(toggleRow);
 
     // Render sections
-    const originalLayout = this._originalLayouts.get(this._selectedNode.id) || {};
-    const originalTransform = this._originalTransforms.get(this._selectedNode.id) || {};
+    const liveOriginals = this._liveOriginals.get(this._selectedNode.id);
+    const originalLayout = liveOriginals?.layout || {};
+    const originalTransform = liveOriginals?.transform || {};
 
     for (const section of PROPERTY_SECTIONS) {
       const sectionEl = document.createElement('div');
@@ -645,25 +607,25 @@ export class PropertyPanel {
             value = undefined;
           }
 
-          // Track pending changes
+          // Track session changes
           const nodeId = this._selectedNode!.id;
-          if (!this._pendingChanges.has(nodeId)) {
-            this._pendingChanges.set(nodeId, {});
+          if (!this._sessionChanges.has(nodeId)) {
+            this._sessionChanges.set(nodeId, {});
           }
-          const nodeChanges = this._pendingChanges.get(nodeId)!;
+          const nodeChanges = this._sessionChanges.get(nodeId)!;
 
           // Only store if different from original
           const origStore = section.isTransform ? originalTransform : originalLayout;
           const origVal = origStore[prop.key];
           if (value !== origVal) {
             nodeChanges[prop.key] = value;
+            this._hasUnsavedChanges = true;
           } else {
             delete nodeChanges[prop.key];
             if (Object.keys(nodeChanges).length === 0) {
-              this._pendingChanges.delete(nodeId);
+              this._sessionChanges.delete(nodeId);
             }
           }
-          this.saveToStorage();
 
           this._onChange?.(this._selectedNode!.id, prop.key, value);
         });
