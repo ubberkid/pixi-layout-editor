@@ -17,6 +17,7 @@ const autosaveCheckbox = document.getElementById('autosave-checkbox')! as HTMLIn
 
 // Track current session
 let currentSessionName: string | null = null;
+let originalsCaptured = false;
 
 // Load autosave preference
 const AUTOSAVE_KEY = 'layout-editor-autosave';
@@ -42,11 +43,16 @@ const propertyPanel = new PropertyPanel('property-form', 'no-selection');
 
 // Apply pending changes to game
 const applyPendingChanges = () => {
-  const pending = propertyPanel.getPendingChanges();
-  if (pending.size > 0) {
-    console.log(`[Layout Editor] Applying ${pending.size} pending changes...`);
-    for (const [nodeId, changes] of pending) {
-      for (const [property, value] of Object.entries(changes)) {
+  const changes = propertyPanel.getSessionChanges();
+  applySessionChanges(changes);
+};
+
+// Apply session changes to game
+const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
+  if (changes.size > 0) {
+    console.log(`[Layout Editor] Applying ${changes.size} node changes...`);
+    for (const [nodeId, nodeChanges] of changes) {
+      for (const [property, value] of Object.entries(nodeChanges)) {
         connection.send({ type: 'set-property', id: nodeId, property, value });
       }
     }
@@ -135,6 +141,11 @@ const updateConnectionDropdown = (connected: boolean) => {
 connection.onStatusChange((connected) => {
   updateConnectionDropdown(connected);
   updateSessionControls(connected);
+
+  if (!connected) {
+    originalsCaptured = false;
+    propertyPanel.clearOriginals();
+  }
 });
 
 // Toggle connection dropdown
@@ -147,7 +158,26 @@ updateConnectionDropdown(false);
 
 // Handle hierarchy updates
 connection.on('hierarchy', (msg) => {
-  treeView.setHierarchy(msg.data as ContainerNode[]);
+  const nodes = msg.data as ContainerNode[];
+
+  // Capture originals only on first hierarchy after connect
+  if (!originalsCaptured) {
+    propertyPanel.captureOriginals(nodes);
+    originalsCaptured = true;
+
+    // Auto-apply current session if one was loaded
+    const currentSession = propertyPanel.getCurrentSessionName();
+    if (currentSession) {
+      const result = propertyPanel.loadSession(currentSession);
+      if (result && result.changes.size > 0) {
+        currentSessionName = currentSession;
+        sessionDropdownBtn.textContent = currentSession;
+        applySessionChanges(result.changes);
+      }
+    }
+  }
+
+  treeView.setHierarchy(nodes);
 });
 
 // Handle property updates
