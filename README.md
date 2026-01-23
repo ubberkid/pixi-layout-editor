@@ -2,8 +2,6 @@
 
 A visual editor for inspecting and editing [@pixi/layout](https://github.com/pixijs/layout) properties in real-time.
 
-![Layout Editor Screenshot](screenshot.png)
-
 ## Features
 
 - **Live Container Tree**: View your PixiJS container hierarchy
@@ -16,39 +14,40 @@ A visual editor for inspecting and editing [@pixi/layout](https://github.com/pix
 ## Installation
 
 ```bash
-npm install pixi-layout-editor
+npm install github:ubberkid/pixi-layout-editor
 ```
 
 ## Quick Start
 
-### 1. Add the bridge to your PixiJS game
+### 1. Add the Vite plugin (recommended)
+
+```typescript
+// vite.config.ts
+import { defineConfig } from "vite";
+import { pixiLayoutEditor } from "pixi-layout-editor/vite";
+
+export default defineConfig({
+  plugins: [pixiLayoutEditor()],
+});
+```
+
+### 2. Add the debug bridge to your game
 
 ```typescript
 import { initDebugBridge } from "pixi-layout-editor";
 
 // After your app is set up and your root container is ready:
-const bridge = initDebugBridge();
-bridge.start(app.stage); // or your root layout container
+if (import.meta.env.DEV) {
+  const bridge = initDebugBridge();
+  bridge.start(app.stage); // or your root layout container
+}
 ```
 
-### 2. Open the editor
+### 3. Open the editor
 
-Run the editor locally:
+Run your dev server and navigate to `/layout-editor` in your browser.
 
-```bash
-git clone https://github.com/ubberkid/pixi-layout-editor
-cd pixi-layout-editor
-npm install
-npm run dev
-```
-
-Or use the hosted version at: `https://ubberkid.github.io/pixi-layout-editor`
-
-### 3. Connect
-
-Make sure both your game and the editor are running on the same origin (same host and port), or use the hosted editor with your local game via the same port.
-
-The editor uses `BroadcastChannel` for communication, which requires same-origin.
+That's it! The editor runs on the same origin as your game, so they can communicate automatically.
 
 ## How It Works
 
@@ -58,38 +57,12 @@ The bridge runs in your game and exposes your container hierarchy via `Broadcast
 - Highlight containers in your game
 - Send property changes that are applied in real-time
 
-## Project Structure
+## Plugin Options
 
-```
-pixi-layout-editor/
-├── bridge/          # npm package - add this to your game
-│   └── src/
-│       ├── LayoutDebugBridge.ts
-│       ├── DebugOverlay.ts
-│       └── types.ts
-├── editor/          # standalone editor web app
-│   └── src/
-│       ├── main.ts
-│       ├── connection.ts
-│       ├── tree-view.ts
-│       └── property-panel.ts
-└── README.md
-```
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run the editor in dev mode
-npm run dev
-
-# Build everything
-npm run build
-
-# Build just the bridge (for npm publishing)
-npm run build:bridge
+```typescript
+pixiLayoutEditor({
+  path: "/layout-editor", // Custom path for the editor (default: "/layout-editor")
+});
 ```
 
 ## API
@@ -121,6 +94,23 @@ addDebugOverlay(container, {
   fillAlpha: 0.3,
   label: "My Container",
 });
+```
+
+## Development
+
+```bash
+# Clone the repo
+git clone https://github.com/ubberkid/pixi-layout-editor
+cd pixi-layout-editor
+
+# Install dependencies
+npm install
+
+# Run the editor standalone (for development)
+npm run dev
+
+# Build everything
+npm run build
 ```
 
 ## License

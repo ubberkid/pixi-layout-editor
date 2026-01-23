@@ -9,6 +9,10 @@
     ".": {
       "import": "./bridge/dist/index.js",
       "types": "./bridge/dist/index.d.ts"
+    },
+    "./vite": {
+      "import": "./bridge/dist/vite-plugin.js",
+      "types": "./bridge/dist/vite-plugin.d.ts"
     }
   },
   "workspaces": [
@@ -17,12 +21,19 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=editor",
-    "build": "npm run build --workspace=bridge && npm run build --workspace=editor",
+    "build": "npm run build:editor && npm run bundle-editor && npm run build:bridge",
     "build:bridge": "npm run build --workspace=bridge",
-    "build:editor": "npm run build --workspace=editor"
+    "build:editor": "npm run build --workspace=editor",
+    "bundle-editor": "rm -rf bridge/editor-dist && cp -r editor/dist bridge/editor-dist"
   },
   "peerDependencies": {
-    "pixi.js": "^8.0.0"
+    "pixi.js": "^8.0.0",
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",
@@ -34,7 +45,8 @@
     "layout",
     "editor",
     "debug",
-    "flexbox"
+    "flexbox",
+    "vite"
   ],
   "author": "ubberkid",
   "license": "MIT"

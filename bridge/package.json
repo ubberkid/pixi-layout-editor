@@ -10,11 +10,15 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./vite": {
+      "import": "./dist/vite-plugin.js",
+      "types": "./dist/vite-plugin.d.ts"
     }
   },
   "files": [
     "dist",
-    "src"
+    "editor-dist"
   ],
   "scripts": {
     "build": "tsc",
@@ -27,16 +31,25 @@
     "layout",
     "editor",
     "debug",
-    "flexbox"
+    "flexbox",
+    "vite"
   ],
   "author": "ubberkid",
   "license": "MIT",
   "peerDependencies": {
-    "pixi.js": "^8.0.0"
+    "pixi.js": "^8.0.0",
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@types/node": "^25.0.10",
     "pixi.js": "^8.6.6",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0"
   },
   "repository": {
     "type": "git",
