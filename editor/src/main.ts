@@ -1,6 +1,6 @@
 import { connection } from './connection';
 import { TreeView } from './tree-view';
-import { PropertyPanel } from './property-panel';
+import { PropertyPanel, isTransformProperty } from './property-panel';
 import { ContainerNode } from './types';
 
 // DOM elements
@@ -14,9 +14,15 @@ const sessionCreate = document.getElementById('session-create')!;
 const saveSessionBtn = document.getElementById('save-session-btn')! as HTMLButtonElement;
 const autosaveLabel = document.getElementById('autosave-label')!;
 const autosaveCheckbox = document.getElementById('autosave-checkbox')! as HTMLInputElement;
+const viewChangesBtn = document.getElementById('view-changes-btn')!;
+const changesModal = document.getElementById('changes-modal')!;
+const changesList = document.getElementById('changes-list')!;
+const closeModalBtn = document.getElementById('close-modal-btn')!;
+const resetAllBtn = document.getElementById('reset-all-btn')!;
 
 // Track current session
 let currentSessionName: string | null = null;
+let originalsCaptured = false;
 
 // Load autosave preference
 const AUTOSAVE_KEY = 'layout-editor-autosave';
@@ -40,13 +46,12 @@ const treeView = new TreeView('tree-view');
 // Property panel
 const propertyPanel = new PropertyPanel('property-form', 'no-selection');
 
-// Apply pending changes to game
-const applyPendingChanges = () => {
-  const pending = propertyPanel.getPendingChanges();
-  if (pending.size > 0) {
-    console.log(`[Layout Editor] Applying ${pending.size} pending changes...`);
-    for (const [nodeId, changes] of pending) {
-      for (const [property, value] of Object.entries(changes)) {
+// Apply session changes to game
+const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
+  if (changes.size > 0) {
+    console.log(`[Layout Editor] Applying ${changes.size} node changes...`);
+    for (const [nodeId, nodeChanges] of changes) {
+      for (const [property, value] of Object.entries(nodeChanges)) {
         connection.send({ type: 'set-property', id: nodeId, property, value });
       }
     }
@@ -58,6 +63,7 @@ const updateSessionControls = (connected: boolean) => {
   sessionDropdown.style.display = connected ? 'block' : 'none';
   saveSessionBtn.style.display = connected ? 'inline-block' : 'none';
   autosaveLabel.style.display = connected ? 'flex' : 'none';
+  viewChangesBtn.style.display = connected ? 'inline-block' : 'none';
   if (connected) {
     updateSaveButton();
   }
@@ -86,10 +92,97 @@ propertyPanel.onChange((nodeId, property, value) => {
   }
 });
 
+propertyPanel.onChangesUpdated(() => {
+  treeView.setChangedNodes(propertyPanel.getChangedNodeIds());
+});
+
 propertyPanel.onCopy((nodeId) => {
   connection.send({ type: 'get-layout', id: nodeId });
 });
 
+propertyPanel.onReset((nodeId, properties) => {
+  for (const [property, value] of Object.entries(properties)) {
+    connection.send({ type: 'set-property', id: nodeId, property, value });
+  }
+});
+
+// View Changes modal
+const renderChangesModal = () => {
+  changesList.innerHTML = '';
+  const changes = propertyPanel.getSessionChanges();
+
+  if (changes.size === 0) {
+    changesList.innerHTML = '<p style="color: #808080;">No changes</p>';
+    return;
+  }
+
+  for (const [nodeId, nodeChanges] of changes) {
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'change-node';
+
+    const header = document.createElement('div');
+    header.className = 'change-node-header';
+    header.textContent = nodeId;
+    header.addEventListener('click', () => {
+      // Select node in tree
+      const node = treeView.getNodeById(nodeId);
+      if (node) {
+        propertyPanel.setSelectedNode(node);
+        treeView.selectNodeById(nodeId);
+      }
+      changesModal.style.display = 'none';
+    });
+    nodeDiv.appendChild(header);
+
+    for (const [prop, value] of Object.entries(nodeChanges)) {
+      const isTransform = isTransformProperty(prop);
+      const original = propertyPanel.getOriginalValue(nodeId, prop, isTransform);
+
+      const item = document.createElement('div');
+      item.className = 'change-item';
+      item.innerHTML = `
+        <span class="change-prop">${prop}:</span>
+        <span class="change-old">${original ?? '(not set)'}</span>
+        <span class="change-arrow">→</span>
+        <span class="change-new">${value ?? '(not set)'}</span>
+      `;
+      nodeDiv.appendChild(item);
+    }
+
+    changesList.appendChild(nodeDiv);
+  }
+};
+
+viewChangesBtn.addEventListener('click', () => {
+  renderChangesModal();
+  changesModal.style.display = 'flex';
+});
+
+closeModalBtn.addEventListener('click', () => {
+  changesModal.style.display = 'none';
+});
+
+changesModal.addEventListener('click', (e) => {
+  if (e.target === changesModal) {
+    changesModal.style.display = 'none';
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && changesModal.style.display !== 'none') {
+    changesModal.style.display = 'none';
+  }
+});
+
+resetAllBtn.addEventListener('click', () => {
+  if (confirm('Reset all changes?')) {
+    const changes = propertyPanel.getSessionChanges();
+    for (const [nodeId] of changes) {
+      propertyPanel.resetNode(nodeId);
+    }
+    changesModal.style.display = 'none';
+  }
+});
 
 // Connection dropdown
 const updateConnectionDropdown = (connected: boolean) => {
@@ -135,6 +228,11 @@ const updateConnectionDropdown = (connected: boolean) => {
 connection.onStatusChange((connected) => {
   updateConnectionDropdown(connected);
   updateSessionControls(connected);
+
+  if (!connected) {
+    originalsCaptured = false;
+    propertyPanel.clearOriginals();
+  }
 });
 
 // Toggle connection dropdown
@@ -147,7 +245,27 @@ updateConnectionDropdown(false);
 
 // Handle hierarchy updates
 connection.on('hierarchy', (msg) => {
-  treeView.setHierarchy(msg.data as ContainerNode[]);
+  const nodes = msg.data as ContainerNode[];
+
+  // Capture originals only on first hierarchy after connect
+  if (!originalsCaptured) {
+    propertyPanel.captureOriginals(nodes);
+    originalsCaptured = true;
+
+    // Auto-apply current session if one was loaded
+    const currentSession = propertyPanel.getCurrentSessionName();
+    if (currentSession) {
+      const result = propertyPanel.loadSession(currentSession);
+      if (result && result.changes.size > 0) {
+        currentSessionName = currentSession;
+        sessionDropdownBtn.textContent = currentSession;
+        applySessionChanges(result.changes);
+      }
+    }
+  }
+
+  treeView.setHierarchy(nodes);
+  treeView.setChangedNodes(propertyPanel.getChangedNodeIds());
 });
 
 // Handle property updates
@@ -197,13 +315,27 @@ const updateSessionList = () => {
     item.appendChild(nameSpan);
     item.appendChild(deleteBtn);
 
-    item.addEventListener('click', () => {
-      propertyPanel.loadSession(name);
-      currentSessionName = name;
-      sessionDropdownBtn.textContent = name;
-      sessionDropdown.classList.remove('open');
-      applyPendingChanges();
-      updateSessionList();
+    item.addEventListener('click', async () => {
+      // Check for unsaved changes
+      if (propertyPanel.hasUnsavedChanges() && !autosaveCheckbox.checked && currentSessionName) {
+        const response = confirm(`Save changes to "${currentSessionName}" before switching?`);
+        if (response) {
+          propertyPanel.saveSession(currentSessionName);
+        }
+        // If they click Cancel on confirm, we still switch (no way to cancel switch with confirm())
+      } else if (autosaveCheckbox.checked && currentSessionName) {
+        // Auto-save before switching
+        propertyPanel.saveSession(currentSessionName);
+      }
+
+      const result = propertyPanel.loadSession(name);
+      if (result) {
+        currentSessionName = name;
+        sessionDropdownBtn.textContent = name;
+        sessionDropdown.classList.remove('open');
+        applySessionChanges(result.changes);
+        updateSessionList();
+      }
     });
 
     sessionList.appendChild(item);

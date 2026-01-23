@@ -1,5 +1,11 @@
 import { ContainerNode } from './types';
 
+const TRANSFORM_PROPERTIES = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'] as const;
+
+export function isTransformProperty(prop: string): boolean {
+  return (TRANSFORM_PROPERTIES as readonly string[]).includes(prop);
+}
+
 export type PropertyChangeHandler = (
   nodeId: string,
   property: string,
@@ -297,89 +303,96 @@ const PROPERTY_SECTIONS: PropertySection[] = [
   },
 ];
 
-const STORAGE_KEY = 'layout-editor-changes';
-const ORIGINALS_KEY = 'layout-editor-originals';
-const TRANSFORMS_KEY = 'layout-editor-transforms';
 const SESSIONS_KEY = 'layout-editor-sessions';
+const CURRENT_SESSION_KEY = 'layout-editor-current-session';
 
 interface SessionData {
   changes: Record<string, Record<string, any>>;
-  originals: Record<string, Record<string, any>>;
-  transforms: Record<string, Record<string, any>>;
+}
+
+interface LiveOriginals {
+  layout: Record<string, any>;
+  transform: Record<string, any>;
 }
 
 export class PropertyPanel {
   private _formContainer: HTMLElement;
   private _noSelectionEl: HTMLElement;
   private _selectedNode: ContainerNode | null = null;
-  private _originalLayouts: Map<string, Record<string, any>> = new Map();
-  private _originalTransforms: Map<string, Record<string, any>> = new Map();
-  private _pendingChanges: Map<string, Record<string, any>> = new Map();
+
+  // In-memory only - captured from game on hierarchy receive
+  private _liveOriginals: Map<string, LiveOriginals> = new Map();
+
+  // Current session's changes (from loaded session or user edits)
+  private _sessionChanges: Map<string, Record<string, any>> = new Map();
+
+  // Track if we have unsaved changes since last session save
+  private _hasUnsavedChanges: boolean = false;
+
   private _onChange: PropertyChangeHandler | null = null;
   private _onCopy: CopyHandler | null = null;
+  private _onChangesUpdated: (() => void) | null = null;
+  private _onReset: ((nodeId: string, properties: Record<string, any>) => void) | null = null;
 
   constructor(formId: string, noSelectionId: string) {
     this._formContainer = document.getElementById(formId)!;
     this._noSelectionEl = document.getElementById(noSelectionId)!;
-    this.loadFromStorage();
+
+    // Migration: clear old localStorage keys from previous implementation
+    localStorage.removeItem('layout-editor-changes');
+    localStorage.removeItem('layout-editor-originals');
+    localStorage.removeItem('layout-editor-transforms');
   }
 
-  private loadFromStorage(): void {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        this._pendingChanges = new Map(Object.entries(data));
-        console.log(`[PropertyPanel] Loaded ${this._pendingChanges.size} nodes with pending changes`);
-      }
+  /**
+   * Capture live original values from game hierarchy.
+   * Called once when hierarchy is first received after connection.
+   */
+  captureOriginals(nodes: ContainerNode[]): void {
+    this._liveOriginals.clear();
 
-      const originals = localStorage.getItem(ORIGINALS_KEY);
-      if (originals) {
-        const data = JSON.parse(originals);
-        this._originalLayouts = new Map(Object.entries(data));
-      }
+    const captureNode = (node: ContainerNode) => {
+      this._liveOriginals.set(node.id, {
+        layout: node.layout ? { ...node.layout } : {},
+        transform: node.transform ? { ...node.transform } : {},
+      });
+      node.children.forEach(captureNode);
+    };
 
-      const transforms = localStorage.getItem(TRANSFORMS_KEY);
-      if (transforms) {
-        const data = JSON.parse(transforms);
-        this._originalTransforms = new Map(Object.entries(data));
-      }
-    } catch (e) {
-      console.warn('[PropertyPanel] Failed to load from storage:', e);
-    }
+    nodes.forEach(captureNode);
+    console.log(`[PropertyPanel] Captured originals for ${this._liveOriginals.size} nodes`);
   }
 
-  private saveToStorage(): void {
-    try {
-      const data = Object.fromEntries(this._pendingChanges);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-      const originals = Object.fromEntries(this._originalLayouts);
-      localStorage.setItem(ORIGINALS_KEY, JSON.stringify(originals));
-
-      const transforms = Object.fromEntries(this._originalTransforms);
-      localStorage.setItem(TRANSFORMS_KEY, JSON.stringify(transforms));
-    } catch (e) {
-      console.warn('[PropertyPanel] Failed to save to storage:', e);
-    }
+  /**
+   * Clear originals (called on disconnect).
+   */
+  clearOriginals(): void {
+    this._liveOriginals.clear();
   }
 
-  getPendingChanges(): Map<string, Record<string, any>> {
-    return this._pendingChanges;
+  /**
+   * Get the live original value for a node's property.
+   */
+  getOriginalValue(nodeId: string, property: string, isTransform: boolean): any {
+    const originals = this._liveOriginals.get(nodeId);
+    if (!originals) return undefined;
+    return isTransform ? originals.transform[property] : originals.layout[property];
   }
 
-  hasPendingChanges(): boolean {
-    return this._pendingChanges.size > 0;
+  getSessionChanges(): Map<string, Record<string, any>> {
+    return this._sessionChanges;
   }
 
-  clearPendingChanges(): void {
-    this._pendingChanges.clear();
-    this._originalLayouts.clear();
-    this._originalTransforms.clear();
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(ORIGINALS_KEY);
-    localStorage.removeItem(TRANSFORMS_KEY);
-    this.render();
+  hasUnsavedChanges(): boolean {
+    return this._hasUnsavedChanges;
+  }
+
+  hasOriginals(): boolean {
+    return this._liveOriginals.size > 0;
+  }
+
+  clearCurrentSession(): void {
+    localStorage.removeItem(CURRENT_SESSION_KEY);
   }
 
   // Session management
@@ -394,46 +407,96 @@ export class PropertyPanel {
 
   saveSession(name: string): void {
     try {
-      // Save current state to session
-      const sessionData: SessionData = {
-        changes: Object.fromEntries(this._pendingChanges),
-        originals: Object.fromEntries(this._originalLayouts),
-        transforms: Object.fromEntries(this._originalTransforms),
-      };
+      // Build changes: only properties that differ from liveOriginals
+      const changes: Record<string, Record<string, any>> = {};
+
+      for (const [nodeId, nodeChanges] of this._sessionChanges) {
+        const validChanges: Record<string, any> = {};
+        const originals = this._liveOriginals.get(nodeId);
+
+        for (const [prop, value] of Object.entries(nodeChanges)) {
+          // Determine if this is a transform property
+          const isTransform = isTransformProperty(prop);
+          const originalValue = originals
+            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+            : undefined;
+
+          // Only save if different from live original
+          if (value !== originalValue) {
+            validChanges[prop] = value;
+          }
+        }
+
+        if (Object.keys(validChanges).length > 0) {
+          changes[nodeId] = validChanges;
+        }
+      }
+
+      const sessionData: SessionData = { changes };
       localStorage.setItem(`layout-editor-session-${name}`, JSON.stringify(sessionData));
 
-      // Add to sessions list if not already there
+      // Update sessions list
       const sessions = this.getSessions();
       if (!sessions.includes(name)) {
         sessions.push(name);
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
       }
 
-      console.log(`[PropertyPanel] Saved session: ${name}`);
+      // Update current session
+      localStorage.setItem(CURRENT_SESSION_KEY, name);
+      this._hasUnsavedChanges = false;
+
+      console.log(`[PropertyPanel] Saved session: ${name} (${Object.keys(changes).length} nodes)`);
     } catch (e) {
       console.warn('[PropertyPanel] Failed to save session:', e);
     }
   }
 
-  loadSession(name: string): boolean {
+  loadSession(name: string): { changes: Map<string, Record<string, any>>, skipped: number } | null {
     try {
       const saved = localStorage.getItem(`layout-editor-session-${name}`);
-      if (!saved) return false;
+      if (!saved) return null;
 
       const sessionData: SessionData = JSON.parse(saved);
-      this._pendingChanges = new Map(Object.entries(sessionData.changes));
-      this._originalLayouts = new Map(Object.entries(sessionData.originals));
-      this._originalTransforms = new Map(Object.entries(sessionData.transforms || {}));
+      this._sessionChanges.clear();
 
-      // Also save as current working state
-      this.saveToStorage();
+      let skipped = 0;
 
-      console.log(`[PropertyPanel] Loaded session: ${name}`);
+      // Load changes, filtering out any that match current live originals
+      for (const [nodeId, nodeChanges] of Object.entries(sessionData.changes)) {
+        const validChanges: Record<string, any> = {};
+        const originals = this._liveOriginals.get(nodeId);
+
+        for (const [prop, value] of Object.entries(nodeChanges)) {
+          const isTransform = isTransformProperty(prop);
+          const originalValue = originals
+            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+            : undefined;
+
+          // Only keep if different from live original
+          if (value !== originalValue) {
+            validChanges[prop] = value;
+          } else {
+            skipped++;
+          }
+        }
+
+        if (Object.keys(validChanges).length > 0) {
+          this._sessionChanges.set(nodeId, validChanges);
+        }
+      }
+
+      localStorage.setItem(CURRENT_SESSION_KEY, name);
+      this._hasUnsavedChanges = false;
+
+      console.log(`[PropertyPanel] Loaded session: ${name} (skipped ${skipped} matching values)`);
+      this._onChangesUpdated?.();
       this.render();
-      return true;
+
+      return { changes: this._sessionChanges, skipped };
     } catch (e) {
       console.warn('[PropertyPanel] Failed to load session:', e);
-      return false;
+      return null;
     }
   }
 
@@ -450,6 +513,10 @@ export class PropertyPanel {
     }
   }
 
+  getCurrentSessionName(): string | null {
+    return localStorage.getItem(CURRENT_SESSION_KEY);
+  }
+
   onChange(handler: PropertyChangeHandler): void {
     this._onChange = handler;
   }
@@ -458,18 +525,45 @@ export class PropertyPanel {
     this._onCopy = handler;
   }
 
+  onChangesUpdated(handler: () => void): void {
+    this._onChangesUpdated = handler;
+  }
+
+  onReset(handler: (nodeId: string, properties: Record<string, any>) => void): void {
+    this._onReset = handler;
+  }
+
+  resetNode(nodeId: string): void {
+    const originals = this._liveOriginals.get(nodeId);
+    if (!originals) return;
+
+    const changes = this._sessionChanges.get(nodeId);
+    if (!changes) return;
+
+    // Build reset values (original values for each changed property)
+    const resetValues: Record<string, any> = {};
+    for (const prop of Object.keys(changes)) {
+      const isTransform = isTransformProperty(prop);
+      resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
+    }
+
+    // Remove from session changes
+    this._sessionChanges.delete(nodeId);
+    this._hasUnsavedChanges = true;
+
+    // Notify to send resets to game
+    this._onReset?.(nodeId, resetValues);
+    this._onChangesUpdated?.();
+
+    this.render();
+  }
+
+  getChangedNodeIds(): Set<string> {
+    return new Set(this._sessionChanges.keys());
+  }
+
   setSelectedNode(node: ContainerNode | null): void {
     this._selectedNode = node;
-    // Store original values only the first time we see this node
-    if (node) {
-      if (!this._originalLayouts.has(node.id)) {
-        this._originalLayouts.set(node.id, node.layout ? { ...node.layout } : {});
-      }
-      if (!this._originalTransforms.has(node.id)) {
-        this._originalTransforms.set(node.id, node.transform ? { ...node.transform } : {});
-      }
-      this.saveToStorage();
-    }
     this.render();
   }
 
@@ -494,11 +588,28 @@ export class PropertyPanel {
     this._formContainer.style.display = 'block';
     this._formContainer.innerHTML = '';
 
-    // Selected name
+    // Selected name with reset button
+    const nameRow = document.createElement('div');
+    nameRow.id = 'selected-name-row';
+
     const nameEl = document.createElement('div');
     nameEl.id = 'selected-name';
     nameEl.textContent = this._selectedNode.id;
-    this._formContainer.appendChild(nameEl);
+    nameRow.appendChild(nameEl);
+
+    // Reset button - only show if node has changes
+    if (this._sessionChanges.has(this._selectedNode.id)) {
+      const resetBtn = document.createElement('button');
+      resetBtn.id = 'reset-node-btn';
+      resetBtn.textContent = 'Reset';
+      resetBtn.title = 'Reset all changes for this node';
+      resetBtn.addEventListener('click', () => {
+        this.resetNode(this._selectedNode!.id);
+      });
+      nameRow.appendChild(resetBtn);
+    }
+
+    this._formContainer.appendChild(nameRow);
 
     // Layout enabled toggle
     const toggleRow = document.createElement('div');
@@ -519,8 +630,10 @@ export class PropertyPanel {
     this._formContainer.appendChild(toggleRow);
 
     // Render sections
-    const originalLayout = this._originalLayouts.get(this._selectedNode.id) || {};
-    const originalTransform = this._originalTransforms.get(this._selectedNode.id) || {};
+    const nodeOriginals = this._liveOriginals.get(this._selectedNode.id);
+    const originalLayout = nodeOriginals?.layout || {};
+    const originalTransform = nodeOriginals?.transform || {};
+    const nodeChanges = this._sessionChanges.get(this._selectedNode.id) || {};
 
     for (const section of PROPERTY_SECTIONS) {
       const sectionEl = document.createElement('div');
@@ -576,12 +689,15 @@ export class PropertyPanel {
         let currentValue: any;
         let originalValue: any;
 
+        // Check session changes first, then fall back to live node value
+        const sessionValue = nodeChanges[prop.key];
+
         if (section.isTransform) {
           const transformKey = prop.key as keyof ContainerNode['transform'];
-          currentValue = this._selectedNode.transform?.[transformKey];
+          currentValue = sessionValue !== undefined ? sessionValue : this._selectedNode.transform?.[transformKey];
           originalValue = originalTransform[prop.key];
         } else {
-          currentValue = this._selectedNode.layout?.[prop.key];
+          currentValue = sessionValue !== undefined ? sessionValue : this._selectedNode.layout?.[prop.key];
           originalValue = originalLayout[prop.key];
         }
 
@@ -617,6 +733,8 @@ export class PropertyPanel {
         updateOriginalDisplay();
 
         // Click original to reset
+        originalSpan.setAttribute('role', 'button');
+        originalSpan.setAttribute('tabindex', '0');
         originalSpan.addEventListener('click', () => {
           if (originalValue !== undefined) {
             input.value = String(originalValue);
@@ -626,6 +744,20 @@ export class PropertyPanel {
           input.classList.toggle('has-value', input.value !== '');
           updateOriginalDisplay();
           this._onChange?.(this._selectedNode!.id, prop.key, originalValue);
+        });
+        originalSpan.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            // Same logic as click handler
+            if (originalValue !== undefined) {
+              input.value = String(originalValue);
+            } else {
+              input.value = '';
+            }
+            input.classList.toggle('has-value', input.value !== '');
+            updateOriginalDisplay();
+            this._onChange?.(this._selectedNode!.id, prop.key, originalValue);
+          }
         });
 
         input.addEventListener('change', () => {
@@ -639,26 +771,26 @@ export class PropertyPanel {
             value = undefined;
           }
 
-          // Track pending changes
+          // Track session changes
           const nodeId = this._selectedNode!.id;
-          if (!this._pendingChanges.has(nodeId)) {
-            this._pendingChanges.set(nodeId, {});
+          if (!this._sessionChanges.has(nodeId)) {
+            this._sessionChanges.set(nodeId, {});
           }
-          const nodeChanges = this._pendingChanges.get(nodeId)!;
+          const changes = this._sessionChanges.get(nodeId)!;
 
           // Only store if different from original
-          const origStore = section.isTransform ? originalTransform : originalLayout;
-          const origVal = origStore[prop.key];
+          const origVal = section.isTransform ? originalTransform[prop.key] : originalLayout[prop.key];
           if (value !== origVal) {
-            nodeChanges[prop.key] = value;
+            changes[prop.key] = value;
+            this._hasUnsavedChanges = true;
           } else {
-            delete nodeChanges[prop.key];
-            if (Object.keys(nodeChanges).length === 0) {
-              this._pendingChanges.delete(nodeId);
+            delete changes[prop.key];
+            if (Object.keys(changes).length === 0) {
+              this._sessionChanges.delete(nodeId);
             }
           }
-          this.saveToStorage();
 
+          this._onChangesUpdated?.();
           this._onChange?.(this._selectedNode!.id, prop.key, value);
         });
 
