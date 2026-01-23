@@ -41,12 +41,6 @@ const treeView = new TreeView('tree-view');
 // Property panel
 const propertyPanel = new PropertyPanel('property-form', 'no-selection');
 
-// Apply pending changes to game
-const applyPendingChanges = () => {
-  const changes = propertyPanel.getSessionChanges();
-  applySessionChanges(changes);
-};
-
 // Apply session changes to game
 const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
   if (changes.size > 0) {
@@ -227,13 +221,27 @@ const updateSessionList = () => {
     item.appendChild(nameSpan);
     item.appendChild(deleteBtn);
 
-    item.addEventListener('click', () => {
-      propertyPanel.loadSession(name);
-      currentSessionName = name;
-      sessionDropdownBtn.textContent = name;
-      sessionDropdown.classList.remove('open');
-      applyPendingChanges();
-      updateSessionList();
+    item.addEventListener('click', async () => {
+      // Check for unsaved changes
+      if (propertyPanel.hasUnsavedChanges() && !autosaveCheckbox.checked && currentSessionName) {
+        const response = confirm(`Save changes to "${currentSessionName}" before switching?`);
+        if (response) {
+          propertyPanel.saveSession(currentSessionName);
+        }
+        // If they click Cancel on confirm, we still switch (no way to cancel switch with confirm())
+      } else if (autosaveCheckbox.checked && currentSessionName) {
+        // Auto-save before switching
+        propertyPanel.saveSession(currentSessionName);
+      }
+
+      const result = propertyPanel.loadSession(name);
+      if (result) {
+        currentSessionName = name;
+        sessionDropdownBtn.textContent = name;
+        sessionDropdown.classList.remove('open');
+        applySessionChanges(result.changes);
+        updateSessionList();
+      }
     });
 
     sessionList.appendChild(item);
