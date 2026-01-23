@@ -298,8 +298,7 @@ const PROPERTY_SECTIONS: PropertySection[] = [
 ];
 
 const SESSIONS_KEY = 'layout-editor-sessions';
-// @ts-expect-error - Used in later tasks for session switching
-const _CURRENT_SESSION_KEY = 'layout-editor-current-session';
+const CURRENT_SESSION_KEY = 'layout-editor-current-session';
 
 interface SessionData {
   changes: Record<string, Record<string, any>>;
@@ -390,6 +389,11 @@ export class PropertyPanel {
     return this._sessionChanges;
   }
 
+  /** Alias for getSessionChanges - used by main.ts for applying pending changes */
+  getPendingChanges(): Map<string, Record<string, any>> {
+    return this._sessionChanges;
+  }
+
   hasUnsavedChanges(): boolean {
     return this._hasUnsavedChanges;
   }
@@ -416,41 +420,95 @@ export class PropertyPanel {
 
   saveSession(name: string): void {
     try {
-      // Save only changes to session (originals come from live game)
-      const sessionData: SessionData = {
-        changes: Object.fromEntries(this._sessionChanges),
-      };
+      // Build changes: only properties that differ from liveOriginals
+      const changes: Record<string, Record<string, any>> = {};
+
+      for (const [nodeId, nodeChanges] of this._sessionChanges) {
+        const validChanges: Record<string, any> = {};
+        const originals = this._liveOriginals.get(nodeId);
+
+        for (const [prop, value] of Object.entries(nodeChanges)) {
+          // Determine if this is a transform property
+          const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+          const originalValue = originals
+            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+            : undefined;
+
+          // Only save if different from live original
+          if (value !== originalValue) {
+            validChanges[prop] = value;
+          }
+        }
+
+        if (Object.keys(validChanges).length > 0) {
+          changes[nodeId] = validChanges;
+        }
+      }
+
+      const sessionData: SessionData = { changes };
       localStorage.setItem(`layout-editor-session-${name}`, JSON.stringify(sessionData));
 
-      // Add to sessions list if not already there
+      // Update sessions list
       const sessions = this.getSessions();
       if (!sessions.includes(name)) {
         sessions.push(name);
         localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
       }
 
+      // Update current session
+      localStorage.setItem(CURRENT_SESSION_KEY, name);
       this._hasUnsavedChanges = false;
-      console.log(`[PropertyPanel] Saved session: ${name}`);
+
+      console.log(`[PropertyPanel] Saved session: ${name} (${Object.keys(changes).length} nodes)`);
     } catch (e) {
       console.warn('[PropertyPanel] Failed to save session:', e);
     }
   }
 
-  loadSession(name: string): boolean {
+  loadSession(name: string): { changes: Map<string, Record<string, any>>, skipped: number } | null {
     try {
       const saved = localStorage.getItem(`layout-editor-session-${name}`);
-      if (!saved) return false;
+      if (!saved) return null;
 
       const sessionData: SessionData = JSON.parse(saved);
-      this._sessionChanges = new Map(Object.entries(sessionData.changes));
+      this._sessionChanges.clear();
+
+      let skipped = 0;
+
+      // Load changes, filtering out any that match current live originals
+      for (const [nodeId, nodeChanges] of Object.entries(sessionData.changes)) {
+        const validChanges: Record<string, any> = {};
+        const originals = this._liveOriginals.get(nodeId);
+
+        for (const [prop, value] of Object.entries(nodeChanges)) {
+          const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+          const originalValue = originals
+            ? (isTransform ? originals.transform[prop] : originals.layout[prop])
+            : undefined;
+
+          // Only keep if different from live original
+          if (value !== originalValue) {
+            validChanges[prop] = value;
+          } else {
+            skipped++;
+          }
+        }
+
+        if (Object.keys(validChanges).length > 0) {
+          this._sessionChanges.set(nodeId, validChanges);
+        }
+      }
+
+      localStorage.setItem(CURRENT_SESSION_KEY, name);
       this._hasUnsavedChanges = false;
 
-      console.log(`[PropertyPanel] Loaded session: ${name}`);
+      console.log(`[PropertyPanel] Loaded session: ${name} (skipped ${skipped} matching values)`);
       this.render();
-      return true;
+
+      return { changes: this._sessionChanges, skipped };
     } catch (e) {
       console.warn('[PropertyPanel] Failed to load session:', e);
-      return false;
+      return null;
     }
   }
 
@@ -465,6 +523,14 @@ export class PropertyPanel {
     } catch (e) {
       console.warn('[PropertyPanel] Failed to delete session:', e);
     }
+  }
+
+  getCurrentSessionName(): string | null {
+    return localStorage.getItem(CURRENT_SESSION_KEY);
+  }
+
+  clearCurrentSession(): void {
+    localStorage.removeItem(CURRENT_SESSION_KEY);
   }
 
   onChange(handler: PropertyChangeHandler): void {
