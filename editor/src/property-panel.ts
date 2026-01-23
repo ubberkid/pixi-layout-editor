@@ -632,12 +632,21 @@ export class PropertyPanel {
       const nodeId = this._selectedNode!.id;
       const enabling = toggleCheckbox.checked;
 
-      // Send the layout enabled change
-      this._onChange?.(nodeId, '_layoutEnabled', enabling);
+      if (enabling) {
+        this._onChange?.(nodeId, '_layoutEnabled', true);
+      } else {
+        // When disabling layout:
+        // 1. First nudge a transform value to dirty it (while layout still enabled)
+        // 2. Then disable layout
+        // 3. Then restore original transform values
+        // This workaround is needed because pixi/layout needs a dirtied transform
+        const currentAlpha = this._selectedNode?.transform?.alpha ?? 1;
+        this._onChange?.(nodeId, 'alpha', currentAlpha + 0.0001);
 
-      // When disabling layout, restore original transform values
-      // so the container returns to its pre-layout position
-      if (!enabling) {
+        // Now disable layout
+        this._onChange?.(nodeId, '_layoutEnabled', false);
+
+        // Restore original transform values
         const originals = this._liveOriginals.get(nodeId);
         if (originals?.transform) {
           const transformProps = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'alpha'];
