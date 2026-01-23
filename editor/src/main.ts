@@ -270,7 +270,11 @@ connection.on('hierarchy', (msg) => {
 
 // Handle property updates
 connection.on('updated', (msg) => {
-  propertyPanel.updateNodeLayout(msg.id, msg.layout, msg.transform);
+  propertyPanel.updateNodeLayout(msg.id, msg.layout, msg.transform, msg.layoutEnabled);
+  // Update tree-view hierarchy if layoutEnabled changed
+  if (msg.layoutEnabled !== undefined) {
+    treeView.updateNode(msg.id, { layout: msg.layout, layoutEnabled: msg.layoutEnabled });
+  }
 });
 
 // Handle layout config (for copy)

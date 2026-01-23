@@ -52,6 +52,14 @@ export class TreeView {
     return findNode(this._hierarchy);
   }
 
+  updateNode(id: string, updates: Partial<ContainerNode>): void {
+    const node = this.getNodeById(id);
+    if (node) {
+      Object.assign(node, updates);
+      this.render();
+    }
+  }
+
   selectNodeById(id: string): void {
     this._selectedId = id;
     this.render();

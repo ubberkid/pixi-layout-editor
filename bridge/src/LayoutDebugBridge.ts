@@ -117,7 +117,8 @@ export class LayoutDebugBridge {
 	private serializeContainer(container: Container): ContainerNode {
 		const layout = this.extractLayout(container);
 		const layoutObj = (container as Container & { layout?: unknown }).layout;
-		const layoutEnabled = layoutObj !== undefined && layoutObj !== null;
+		// Check for truthy layout value - false, null, undefined all mean disabled
+		const layoutEnabled = !!layoutObj;
 		const transform = this.extractTransform(container);
 
 		const children: ContainerNode[] = [];
@@ -203,13 +204,12 @@ export class LayoutDebugBridge {
 		if (property === '_layoutEnabled') {
 			const containerWithLayout = container as Container & { layout?: unknown };
 			if (value) {
-				// Enable layout - set empty layout object if none exists
-				if (!containerWithLayout.layout) {
-					containerWithLayout.layout = {};
-				}
+				// Enable layout - set layout to true to opt-in to layout system
+				// Per pixi/layout docs, this is equivalent to { width: 'intrinsic', height: 'intrinsic' }
+				containerWithLayout.layout = true;
 			} else {
-				// Disable layout - remove layout object
-				containerWithLayout.layout = null;
+				// Disable layout - set to false to opt-out
+				containerWithLayout.layout = false;
 			}
 
 			// Send updated state back

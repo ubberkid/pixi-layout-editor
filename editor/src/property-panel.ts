@@ -567,11 +567,14 @@ export class PropertyPanel {
     this.render();
   }
 
-  updateNodeLayout(nodeId: string, layout: Record<string, any>, transform?: Record<string, any>): void {
+  updateNodeLayout(nodeId: string, layout: Record<string, any>, transform?: Record<string, any>, layoutEnabled?: boolean): void {
     if (this._selectedNode?.id === nodeId) {
       this._selectedNode.layout = layout;
       if (transform) {
         this._selectedNode.transform = transform as ContainerNode['transform'];
+      }
+      if (layoutEnabled !== undefined) {
+        this._selectedNode.layoutEnabled = layoutEnabled;
       }
       // Don't re-render to avoid losing focus, just update values
     }
