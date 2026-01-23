@@ -1,6 +1,6 @@
 import { connection } from './connection';
 import { TreeView } from './tree-view';
-import { PropertyPanel } from './property-panel';
+import { PropertyPanel, isTransformProperty } from './property-panel';
 import { ContainerNode } from './types';
 
 // DOM elements
@@ -135,7 +135,7 @@ const renderChangesModal = () => {
     nodeDiv.appendChild(header);
 
     for (const [prop, value] of Object.entries(nodeChanges)) {
-      const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+      const isTransform = isTransformProperty(prop);
       const original = propertyPanel.getOriginalValue(nodeId, prop, isTransform);
 
       const item = document.createElement('div');
@@ -164,6 +164,12 @@ closeModalBtn.addEventListener('click', () => {
 
 changesModal.addEventListener('click', (e) => {
   if (e.target === changesModal) {
+    changesModal.style.display = 'none';
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && changesModal.style.display !== 'none') {
     changesModal.style.display = 'none';
   }
 });

@@ -1,5 +1,11 @@
 import { ContainerNode } from './types';
 
+const TRANSFORM_PROPERTIES = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'] as const;
+
+export function isTransformProperty(prop: string): boolean {
+  return (TRANSFORM_PROPERTIES as readonly string[]).includes(prop);
+}
+
 export type PropertyChangeHandler = (
   nodeId: string,
   property: string,
@@ -381,6 +387,14 @@ export class PropertyPanel {
     return this._hasUnsavedChanges;
   }
 
+  hasOriginals(): boolean {
+    return this._liveOriginals.size > 0;
+  }
+
+  clearCurrentSession(): void {
+    localStorage.removeItem(CURRENT_SESSION_KEY);
+  }
+
   // Session management
   getSessions(): string[] {
     try {
@@ -402,7 +416,7 @@ export class PropertyPanel {
 
         for (const [prop, value] of Object.entries(nodeChanges)) {
           // Determine if this is a transform property
-          const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+          const isTransform = isTransformProperty(prop);
           const originalValue = originals
             ? (isTransform ? originals.transform[prop] : originals.layout[prop])
             : undefined;
@@ -454,7 +468,7 @@ export class PropertyPanel {
         const originals = this._liveOriginals.get(nodeId);
 
         for (const [prop, value] of Object.entries(nodeChanges)) {
-          const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+          const isTransform = isTransformProperty(prop);
           const originalValue = originals
             ? (isTransform ? originals.transform[prop] : originals.layout[prop])
             : undefined;
@@ -529,7 +543,7 @@ export class PropertyPanel {
     // Build reset values (original values for each changed property)
     const resetValues: Record<string, any> = {};
     for (const prop of Object.keys(changes)) {
-      const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+      const isTransform = isTransformProperty(prop);
       resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
     }
 
@@ -719,6 +733,8 @@ export class PropertyPanel {
         updateOriginalDisplay();
 
         // Click original to reset
+        originalSpan.setAttribute('role', 'button');
+        originalSpan.setAttribute('tabindex', '0');
         originalSpan.addEventListener('click', () => {
           if (originalValue !== undefined) {
             input.value = String(originalValue);
@@ -728,6 +744,20 @@ export class PropertyPanel {
           input.classList.toggle('has-value', input.value !== '');
           updateOriginalDisplay();
           this._onChange?.(this._selectedNode!.id, prop.key, originalValue);
+        });
+        originalSpan.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            // Same logic as click handler
+            if (originalValue !== undefined) {
+              input.value = String(originalValue);
+            } else {
+              input.value = '';
+            }
+            input.classList.toggle('has-value', input.value !== '');
+            updateOriginalDisplay();
+            this._onChange?.(this._selectedNode!.id, prop.key, originalValue);
+          }
         });
 
         input.addEventListener('change', () => {
