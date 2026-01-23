@@ -336,13 +336,6 @@ export class PropertyPanel {
     localStorage.removeItem('layout-editor-changes');
     localStorage.removeItem('layout-editor-originals');
     localStorage.removeItem('layout-editor-transforms');
-
-    this.loadFromStorage();
-  }
-
-  private loadFromStorage(): void {
-    // Only load current session name - actual session data loaded on demand
-    // liveOriginals are NOT loaded - they come from game on connect
   }
 
   /**
@@ -372,13 +365,6 @@ export class PropertyPanel {
   }
 
   /**
-   * Check if we have captured originals (i.e., connected to game).
-   */
-  hasOriginals(): boolean {
-    return this._liveOriginals.size > 0;
-  }
-
-  /**
    * Get the live original value for a node's property.
    */
   getOriginalValue(nodeId: string, property: string, isTransform: boolean): any {
@@ -391,24 +377,8 @@ export class PropertyPanel {
     return this._sessionChanges;
   }
 
-  /** Alias for getSessionChanges - used by main.ts for applying pending changes */
-  getPendingChanges(): Map<string, Record<string, any>> {
-    return this._sessionChanges;
-  }
-
   hasUnsavedChanges(): boolean {
     return this._hasUnsavedChanges;
-  }
-
-  hasPendingChanges(): boolean {
-    return this._sessionChanges.size > 0;
-  }
-
-  clearSessionChanges(): void {
-    this._sessionChanges.clear();
-    this._hasUnsavedChanges = false;
-    this._onChangesUpdated?.();
-    this.render();
   }
 
   // Session management
@@ -531,10 +501,6 @@ export class PropertyPanel {
 
   getCurrentSessionName(): string | null {
     return localStorage.getItem(CURRENT_SESSION_KEY);
-  }
-
-  clearCurrentSession(): void {
-    localStorage.removeItem(CURRENT_SESSION_KEY);
   }
 
   onChange(handler: PropertyChangeHandler): void {
