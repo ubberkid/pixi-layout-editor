@@ -86,6 +86,10 @@ propertyPanel.onChange((nodeId, property, value) => {
   }
 });
 
+propertyPanel.onChangesUpdated(() => {
+  treeView.setChangedNodes(propertyPanel.getChangedNodeIds());
+});
+
 propertyPanel.onCopy((nodeId) => {
   connection.send({ type: 'get-layout', id: nodeId });
 });
@@ -172,6 +176,7 @@ connection.on('hierarchy', (msg) => {
   }
 
   treeView.setHierarchy(nodes);
+  treeView.setChangedNodes(propertyPanel.getChangedNodeIds());
 });
 
 // Handle property updates

@@ -325,6 +325,7 @@ export class PropertyPanel {
 
   private _onChange: PropertyChangeHandler | null = null;
   private _onCopy: CopyHandler | null = null;
+  private _onChangesUpdated: (() => void) | null = null;
 
   constructor(formId: string, noSelectionId: string) {
     this._formContainer = document.getElementById(formId)!;
@@ -405,6 +406,7 @@ export class PropertyPanel {
   clearSessionChanges(): void {
     this._sessionChanges.clear();
     this._hasUnsavedChanges = false;
+    this._onChangesUpdated?.();
     this.render();
   }
 
@@ -503,6 +505,7 @@ export class PropertyPanel {
       this._hasUnsavedChanges = false;
 
       console.log(`[PropertyPanel] Loaded session: ${name} (skipped ${skipped} matching values)`);
+      this._onChangesUpdated?.();
       this.render();
 
       return { changes: this._sessionChanges, skipped };
@@ -539,6 +542,14 @@ export class PropertyPanel {
 
   onCopy(handler: CopyHandler): void {
     this._onCopy = handler;
+  }
+
+  onChangesUpdated(handler: () => void): void {
+    this._onChangesUpdated = handler;
+  }
+
+  getChangedNodeIds(): Set<string> {
+    return new Set(this._sessionChanges.keys());
   }
 
   setSelectedNode(node: ContainerNode | null): void {
@@ -736,6 +747,7 @@ export class PropertyPanel {
             }
           }
 
+          this._onChangesUpdated?.();
           this._onChange?.(this._selectedNode!.id, prop.key, value);
         });
 
