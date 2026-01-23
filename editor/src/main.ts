@@ -94,6 +94,12 @@ propertyPanel.onCopy((nodeId) => {
   connection.send({ type: 'get-layout', id: nodeId });
 });
 
+propertyPanel.onReset((nodeId, properties) => {
+  for (const [property, value] of Object.entries(properties)) {
+    connection.send({ type: 'set-property', id: nodeId, property, value });
+  }
+});
+
 
 // Connection dropdown
 const updateConnectionDropdown = (connected: boolean) => {

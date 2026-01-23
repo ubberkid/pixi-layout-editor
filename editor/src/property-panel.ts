@@ -326,6 +326,7 @@ export class PropertyPanel {
   private _onChange: PropertyChangeHandler | null = null;
   private _onCopy: CopyHandler | null = null;
   private _onChangesUpdated: (() => void) | null = null;
+  private _onReset: ((nodeId: string, properties: Record<string, any>) => void) | null = null;
 
   constructor(formId: string, noSelectionId: string) {
     this._formContainer = document.getElementById(formId)!;
@@ -548,6 +549,35 @@ export class PropertyPanel {
     this._onChangesUpdated = handler;
   }
 
+  onReset(handler: (nodeId: string, properties: Record<string, any>) => void): void {
+    this._onReset = handler;
+  }
+
+  resetNode(nodeId: string): void {
+    const originals = this._liveOriginals.get(nodeId);
+    if (!originals) return;
+
+    const changes = this._sessionChanges.get(nodeId);
+    if (!changes) return;
+
+    // Build reset values (original values for each changed property)
+    const resetValues: Record<string, any> = {};
+    for (const prop of Object.keys(changes)) {
+      const isTransform = ['x', 'y', 'scaleX', 'scaleY', 'rotation', 'pivotX', 'pivotY', 'anchorX', 'anchorY', 'alpha'].includes(prop);
+      resetValues[prop] = isTransform ? originals.transform[prop] : originals.layout[prop];
+    }
+
+    // Remove from session changes
+    this._sessionChanges.delete(nodeId);
+    this._hasUnsavedChanges = true;
+
+    // Notify to send resets to game
+    this._onReset?.(nodeId, resetValues);
+    this._onChangesUpdated?.();
+
+    this.render();
+  }
+
   getChangedNodeIds(): Set<string> {
     return new Set(this._sessionChanges.keys());
   }
@@ -578,11 +608,28 @@ export class PropertyPanel {
     this._formContainer.style.display = 'block';
     this._formContainer.innerHTML = '';
 
-    // Selected name
+    // Selected name with reset button
+    const nameRow = document.createElement('div');
+    nameRow.id = 'selected-name-row';
+
     const nameEl = document.createElement('div');
     nameEl.id = 'selected-name';
     nameEl.textContent = this._selectedNode.id;
-    this._formContainer.appendChild(nameEl);
+    nameRow.appendChild(nameEl);
+
+    // Reset button - only show if node has changes
+    if (this._sessionChanges.has(this._selectedNode.id)) {
+      const resetBtn = document.createElement('button');
+      resetBtn.id = 'reset-node-btn';
+      resetBtn.textContent = 'Reset';
+      resetBtn.title = 'Reset all changes for this node';
+      resetBtn.addEventListener('click', () => {
+        this.resetNode(this._selectedNode!.id);
+      });
+      nameRow.appendChild(resetBtn);
+    }
+
+    this._formContainer.appendChild(nameRow);
 
     // Layout enabled toggle
     const toggleRow = document.createElement('div');

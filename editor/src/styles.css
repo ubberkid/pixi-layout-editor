@@ -351,13 +351,29 @@ button:disabled {
   padding: 12px;
 }
 
+#selected-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3c3c3c;
+}
+
 #selected-name {
   font-size: 14px;
   font-weight: 600;
   color: #9cdcfe;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #3c3c3c;
+}
+
+#reset-node-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  background-color: #dc3545;
+}
+
+#reset-node-btn:hover {
+  background-color: #e04555;
 }
 
 /* Property Form Rows */
