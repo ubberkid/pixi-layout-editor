@@ -4,8 +4,7 @@ export declare function initDebugBridge(): LayoutDebugBridge;
 export declare class LayoutDebugBridge {
     private _root;
     private _channel;
-    private _highlightOverlay;
-    private _highlightedContainer;
+    private _highlightOverlays;
     start(root: Container): void;
     private handleMessage;
     private sendHierarchy;

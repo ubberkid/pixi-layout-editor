@@ -224,6 +224,27 @@ button:disabled {
   color: #cccccc;
 }
 
+.tree-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #808080;
+  border-bottom: 1px solid #3c3c3c;
+  cursor: pointer;
+}
+
+.tree-option:hover {
+  color: #d4d4d4;
+}
+
+.tree-option input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
 #tree-view {
   flex: 1;
   overflow-y: auto;

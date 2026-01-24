@@ -16,6 +16,7 @@ const changesModal = document.getElementById('changes-modal')!;
 const changesList = document.getElementById('changes-list')!;
 const closeModalBtn = document.getElementById('close-modal-btn')!;
 const resetAllBtn = document.getElementById('reset-all-btn')!;
+const showChildrenToggle = document.getElementById('show-children-toggle')! as HTMLInputElement;
 
 // Track current session
 let currentSessionName: string | null = null;
@@ -56,13 +57,21 @@ const updateSessionControls = (connected: boolean) => {
 treeView.onSelect((node) => {
   propertyPanel.setSelectedNode(node);
   // Also highlight selected node in game
-  connection.send({ type: 'highlight', id: node?.id || null });
+  connection.send({ type: 'highlight', id: node?.id || null, showChildren: showChildrenToggle.checked });
 });
 
 treeView.onHover((nodeId) => {
   // When not hovering, default to highlighting the selected node
   const highlightId = nodeId ?? treeView.getSelectedId();
-  connection.send({ type: 'highlight', id: highlightId });
+  connection.send({ type: 'highlight', id: highlightId, showChildren: showChildrenToggle.checked });
+});
+
+// Update highlight when toggle changes
+showChildrenToggle.addEventListener('change', () => {
+  const highlightId = treeView.getSelectedId();
+  if (highlightId) {
+    connection.send({ type: 'highlight', id: highlightId, showChildren: showChildrenToggle.checked });
+  }
 });
 
 // Property panel handlers

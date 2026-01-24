@@ -29,6 +29,7 @@ export interface SetPropertyMessage {
 export interface HighlightMessage {
 	type: "highlight";
 	id: string | null;
+	showChildren?: boolean;
 }
 
 export interface GetLayoutMessage {

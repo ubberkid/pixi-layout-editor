@@ -46,8 +46,7 @@ export class LayoutDebugBridge {
     constructor() {
         this._root = null;
         this._channel = null;
-        this._highlightOverlay = null;
-        this._highlightedContainer = null;
+        this._highlightOverlays = [];
     }
     start(root) {
         this._root = root;
@@ -71,7 +70,7 @@ export class LayoutDebugBridge {
                 this.setProperty(message.id, message.property, message.value);
                 break;
             case "highlight":
-                this.highlightContainer(message.id);
+                this.highlightContainer(message.id, message.showChildren);
                 break;
             case "get-layout":
                 this.sendLayoutConfig(message.id);
@@ -254,13 +253,12 @@ export class LayoutDebugBridge {
             transform: this.extractTransform(container),
         });
     }
-    highlightContainer(id) {
-        // Remove existing highlight
-        if (this._highlightOverlay && this._highlightedContainer) {
-            this._highlightedContainer.removeChild(this._highlightOverlay);
-            this._highlightOverlay = null;
-            this._highlightedContainer = null;
+    highlightContainer(id, showChildren) {
+        // Remove existing highlights
+        for (const { overlay, container } of this._highlightOverlays) {
+            container.removeChild(overlay);
         }
+        this._highlightOverlays = [];
         if (!id)
             return;
         const container = this.findContainerById(id);
@@ -268,14 +266,41 @@ export class LayoutDebugBridge {
             console.log(`[LayoutDebugBridge] Container not found: ${id}`);
             return;
         }
-        this._highlightedContainer = container;
-        this._highlightOverlay = addDebugOverlay(container, {
+        // Add highlight to main container
+        const mainOverlay = addDebugOverlay(container, {
             ...DebugColors.cyan,
             fillAlpha: 0.3,
             label: id,
         });
-        // Force visibility since debug overlays may be disabled globally
-        this._highlightOverlay.visible = true;
+        mainOverlay.visible = true;
+        this._highlightOverlays.push({ overlay: mainOverlay, container });
+        // Add highlights to children if requested
+        if (showChildren) {
+            const childColors = [
+                DebugColors.magenta,
+                DebugColors.yellow,
+                DebugColors.green,
+                DebugColors.orange,
+                DebugColors.purple,
+                DebugColors.red,
+                DebugColors.blue,
+            ];
+            let colorIndex = 0;
+            for (const child of container.children) {
+                if (child instanceof Container && child.label !== "Debug Overlay") {
+                    const childId = child.label || `[${child.constructor.name}]`;
+                    const color = childColors[colorIndex % childColors.length];
+                    const childOverlay = addDebugOverlay(child, {
+                        ...color,
+                        fillAlpha: 0.3,
+                        label: childId,
+                    });
+                    childOverlay.visible = true;
+                    this._highlightOverlays.push({ overlay: childOverlay, container: child });
+                    colorIndex++;
+                }
+            }
+        }
     }
     destroy() {
         this._channel?.close();

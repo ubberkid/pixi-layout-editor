@@ -50,8 +50,7 @@ export function initDebugBridge(): LayoutDebugBridge {
 export class LayoutDebugBridge {
 	private _root: Container | null = null;
 	private _channel: BroadcastChannel | null = null;
-	private _highlightOverlay: Container | null = null;
-	private _highlightedContainer: Container | null = null;
+	private _highlightOverlays: Array<{ overlay: Container; container: Container }> = [];
 
 	start(root: Container): void {
 		this._root = root;
@@ -82,7 +81,7 @@ export class LayoutDebugBridge {
 				break;
 
 			case "highlight":
-				this.highlightContainer(message.id);
+				this.highlightContainer(message.id, message.showChildren);
 				break;
 
 			case "get-layout":
@@ -286,13 +285,12 @@ export class LayoutDebugBridge {
 		});
 	}
 
-	private highlightContainer(id: string | null): void {
-		// Remove existing highlight
-		if (this._highlightOverlay && this._highlightedContainer) {
-			this._highlightedContainer.removeChild(this._highlightOverlay);
-			this._highlightOverlay = null;
-			this._highlightedContainer = null;
+	private highlightContainer(id: string | null, showChildren?: boolean): void {
+		// Remove existing highlights
+		for (const { overlay, container } of this._highlightOverlays) {
+			container.removeChild(overlay);
 		}
+		this._highlightOverlays = [];
 
 		if (!id) return;
 
@@ -302,14 +300,43 @@ export class LayoutDebugBridge {
 			return;
 		}
 
-		this._highlightedContainer = container;
-		this._highlightOverlay = addDebugOverlay(container, {
+		// Add highlight to main container
+		const mainOverlay = addDebugOverlay(container, {
 			...DebugColors.cyan,
 			fillAlpha: 0.3,
 			label: id,
 		});
-		// Force visibility since debug overlays may be disabled globally
-		this._highlightOverlay.visible = true;
+		mainOverlay.visible = true;
+		this._highlightOverlays.push({ overlay: mainOverlay, container });
+
+		// Add highlights to children if requested
+		if (showChildren) {
+			const childColors = [
+				DebugColors.magenta,
+				DebugColors.yellow,
+				DebugColors.green,
+				DebugColors.orange,
+				DebugColors.purple,
+				DebugColors.red,
+				DebugColors.blue,
+			];
+
+			let colorIndex = 0;
+			for (const child of container.children) {
+				if (child instanceof Container && child.label !== "Debug Overlay") {
+					const childId = child.label || `[${child.constructor.name}]`;
+					const color = childColors[colorIndex % childColors.length];
+					const childOverlay = addDebugOverlay(child, {
+						...color,
+						fillAlpha: 0.3,
+						label: childId,
+					});
+					childOverlay.visible = true;
+					this._highlightOverlays.push({ overlay: childOverlay, container: child });
+					colorIndex++;
+				}
+			}
+		}
 	}
 
 	destroy(): void {
