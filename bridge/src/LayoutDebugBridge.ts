@@ -300,6 +300,8 @@ export class LayoutDebugBridge {
 			return;
 		}
 
+		console.log(`[LayoutDebugBridge] Highlighting ${id}, showChildren: ${showChildren}, children count: ${container.children.length}`);
+
 		// Add highlight to main container
 		const mainOverlay = addDebugOverlay(container, {
 			...DebugColors.cyan,
