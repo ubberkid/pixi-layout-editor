@@ -62,6 +62,7 @@ export class LayoutDebugBridge {
         console.log(`[LayoutDebugBridge] Started on BroadcastChannel 'layout-editor'`);
     }
     handleMessage(message) {
+        console.log(`[LayoutDebugBridge] Received message:`, message);
         switch (message.type) {
             case "get-hierarchy":
                 this.sendHierarchy();

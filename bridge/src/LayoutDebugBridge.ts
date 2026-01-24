@@ -71,6 +71,7 @@ export class LayoutDebugBridge {
 	}
 
 	private handleMessage(message: EditorMessage): void {
+		console.log(`[LayoutDebugBridge] Received message:`, message);
 		switch (message.type) {
 			case "get-hierarchy":
 				this.sendHierarchy();
