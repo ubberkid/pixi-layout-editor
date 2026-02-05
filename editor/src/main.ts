@@ -1,6 +1,7 @@
 import { connection } from './connection';
 import { TreeView } from './tree-view';
 import { PropertyPanel, isTransformProperty } from './property-panel';
+import { FilterPanel } from './filter-panel';
 import { ContainerNode } from './types';
 
 // DOM elements
@@ -16,7 +17,14 @@ const changesModal = document.getElementById('changes-modal')!;
 const changesList = document.getElementById('changes-list')!;
 const closeModalBtn = document.getElementById('close-modal-btn')!;
 const resetAllBtn = document.getElementById('reset-all-btn')!;
-const showChildrenToggle = document.getElementById('show-children-toggle')! as HTMLInputElement;
+const highlightMode = document.getElementById('highlight-mode')! as HTMLSelectElement;
+
+// Tab elements
+const tabLayout = document.getElementById('tab-layout')!;
+const tabFilters = document.getElementById('tab-filters')! as HTMLButtonElement;
+const noSelection = document.getElementById('no-selection')!;
+const layoutContent = document.getElementById('layout-content')!;
+const filtersContent = document.getElementById('filters-content')!;
 
 // Track current session
 let currentSessionName: string | null = null;
@@ -27,6 +35,49 @@ const treeView = new TreeView('tree-view');
 
 // Property panel
 const propertyPanel = new PropertyPanel('property-form', 'no-selection');
+
+// Filter panel
+const filterPanel = new FilterPanel('filter-form', 'no-filters');
+
+// Current active tab
+let activeTab: 'layout' | 'filters' = 'layout';
+
+// Tab switching
+const switchToTab = (tab: 'layout' | 'filters') => {
+  activeTab = tab;
+  tabLayout.classList.toggle('active', tab === 'layout');
+  tabFilters.classList.toggle('active', tab === 'filters');
+  layoutContent.style.display = tab === 'layout' ? 'block' : 'none';
+  filtersContent.style.display = tab === 'filters' ? 'block' : 'none';
+};
+
+tabLayout.addEventListener('click', () => switchToTab('layout'));
+tabFilters.addEventListener('click', () => {
+  if (!tabFilters.disabled) {
+    switchToTab('filters');
+  }
+});
+
+// Update tabs based on selected node
+const updateTabState = (node: ContainerNode | null) => {
+  const hasFilters = !!(node?.filters && node.filters.length > 0);
+  tabFilters.disabled = !hasFilters;
+
+  if (node) {
+    noSelection.style.display = 'none';
+    layoutContent.style.display = activeTab === 'layout' ? 'block' : 'none';
+    filtersContent.style.display = activeTab === 'filters' ? 'block' : 'none';
+  } else {
+    noSelection.style.display = 'block';
+    layoutContent.style.display = 'none';
+    filtersContent.style.display = 'none';
+  }
+
+  // If on filters tab but no filters, switch to layout
+  if (activeTab === 'filters' && !hasFilters) {
+    switchToTab('layout');
+  }
+};
 
 // Apply session changes to game
 const applySessionChanges = (changes: Map<string, Record<string, any>>) => {
@@ -53,25 +104,35 @@ const updateSessionControls = (connected: boolean) => {
   viewChangesBtn.style.display = connected ? 'inline-block' : 'none';
 };
 
+// Helper to send highlight based on current mode
+const sendHighlight = (id: string | null) => {
+  const mode = highlightMode.value;
+  if (mode === 'none') {
+    connection.send({ type: 'highlight', id: null });
+  } else {
+    connection.send({ type: 'highlight', id, showChildren: mode === 'children' });
+  }
+};
+
 // Tree view handlers
 treeView.onSelect((node) => {
   propertyPanel.setSelectedNode(node);
+  filterPanel.setSelectedNode(node);
+  updateTabState(node);
   // Also highlight selected node in game
-  connection.send({ type: 'highlight', id: node?.id || null, showChildren: showChildrenToggle.checked });
+  sendHighlight(node?.id || null);
 });
 
 treeView.onHover((nodeId) => {
   // When not hovering, default to highlighting the selected node
   const highlightId = nodeId ?? treeView.getSelectedId();
-  connection.send({ type: 'highlight', id: highlightId, showChildren: showChildrenToggle.checked });
+  sendHighlight(highlightId);
 });
 
-// Update highlight when toggle changes
-showChildrenToggle.addEventListener('change', () => {
+// Update highlight when mode changes
+highlightMode.addEventListener('change', () => {
   const highlightId = treeView.getSelectedId();
-  if (highlightId) {
-    connection.send({ type: 'highlight', id: highlightId, showChildren: showChildrenToggle.checked });
-  }
+  sendHighlight(highlightId);
 });
 
 // Property panel handlers
@@ -103,6 +164,18 @@ propertyPanel.onReset((nodeId, properties) => {
     }
     connection.send({ type: 'set-property', id: nodeId, property, value });
   }
+});
+
+// Filter panel handlers
+filterPanel.onChange((nodeId, filterIndex, groupName, uniformName, value) => {
+  connection.send({
+    type: 'set-filter-uniform',
+    id: nodeId,
+    filterIndex,
+    groupName,
+    uniformName,
+    value,
+  });
 });
 
 // View Changes modal
@@ -301,6 +374,11 @@ connection.on('layout-config', (msg) => {
   });
 });
 
+// Handle filter updates
+connection.on('filter-updated', (msg) => {
+  filterPanel.updateFilterUniforms(msg.id, msg.filterIndex, msg.uniforms);
+});
+
 // Session dropdown management
 const updateSessionList = () => {
   const sessions = propertyPanel.getSessions();
@@ -391,5 +469,40 @@ sessionCreate.addEventListener('click', () => {
 // Initial display updates
 updateSessionControls(false);
 updateSessionList();
+
+// Resize handle for tree panel
+const resizeHandle = document.getElementById('resize-handle')!;
+const treePanel = document.getElementById('tree-panel')!;
+
+let isResizing = false;
+let startX = 0;
+let startWidth = 0;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  startX = e.clientX;
+  startWidth = treePanel.offsetWidth;
+  resizeHandle.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+
+  const delta = e.clientX - startX;
+  const newWidth = Math.max(150, Math.min(600, startWidth + delta));
+  treePanel.style.width = `${newWidth}px`;
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    resizeHandle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+});
 
 console.log('Layout Editor loaded');

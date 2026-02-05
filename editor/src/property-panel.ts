@@ -318,7 +318,6 @@ interface LiveOriginals {
 
 export class PropertyPanel {
   private _formContainer: HTMLElement;
-  private _noSelectionEl: HTMLElement;
   private _selectedNode: ContainerNode | null = null;
 
   // In-memory only - captured from game on hierarchy receive
@@ -335,9 +334,8 @@ export class PropertyPanel {
   private _onChangesUpdated: (() => void) | null = null;
   private _onReset: ((nodeId: string, properties: Record<string, any>) => void) | null = null;
 
-  constructor(formId: string, noSelectionId: string) {
+  constructor(formId: string, _noSelectionId?: string) {
     this._formContainer = document.getElementById(formId)!;
-    this._noSelectionEl = document.getElementById(noSelectionId)!;
 
     // Migration: clear old localStorage keys from previous implementation
     localStorage.removeItem('layout-editor-changes');
@@ -636,11 +634,9 @@ export class PropertyPanel {
   private render(): void {
     if (!this._selectedNode) {
       this._formContainer.style.display = 'none';
-      this._noSelectionEl.style.display = 'block';
       return;
     }
 
-    this._noSelectionEl.style.display = 'none';
     this._formContainer.style.display = 'block';
     this._formContainer.innerHTML = '';
 

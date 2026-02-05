@@ -6,10 +6,16 @@ A visual editor for inspecting and editing [@pixi/layout](https://github.com/pix
 
 ## Features
 
-- **Live Container Tree**: View your PixiJS container hierarchy
+- **Live Container Tree**: View your PixiJS container hierarchy with badges showing layout [L] and shader [S] status
 - **Property Editing**: Edit flexbox layout properties (width, height, flexDirection, justifyContent, alignItems, gap, padding, margin, etc.)
 - **Transform Editing**: Modify position, scale, rotation, pivot, anchor, and alpha
-- **Visual Highlighting**: See which container you're editing highlighted in your game
+- **Shader/Filter Inspector**: Real-time editing of filter uniforms with type-appropriate controls:
+  - Float values with slider + number input
+  - Color pickers for vec3/vec4 color uniforms
+  - Vector inputs for vec2/vec3/vec4 uniforms
+  - Checkbox for boolean uniforms
+- **Visual Highlighting**: Three highlight modes - None, Selected only, or Selected with Children
+- **Resizable Panels**: Drag the divider between tree view and property panel to resize
 - **Session Management**: Save and load different layout configurations
 - **Auto-Save**: Automatically save changes as you edit
 

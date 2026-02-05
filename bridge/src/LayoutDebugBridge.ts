@@ -1,5 +1,5 @@
-import { Container } from "pixi.js";
-import { ContainerNode, EditorMessage } from "./types";
+import { Container, Filter } from "pixi.js";
+import { ContainerNode, EditorMessage, FilterInfo, FilterUniform } from "./types";
 import { addDebugOverlay, DebugColors } from "./DebugOverlay";
 
 // Layout properties we care about
@@ -87,6 +87,16 @@ export class LayoutDebugBridge {
 			case "get-layout":
 				this.sendLayoutConfig(message.id);
 				break;
+
+			case "set-filter-uniform":
+				this.setFilterUniform(
+					message.id,
+					message.filterIndex,
+					message.groupName,
+					message.uniformName,
+					message.value
+				);
+				break;
 		}
 	}
 
@@ -119,6 +129,7 @@ export class LayoutDebugBridge {
 		// Check for truthy layout value - false, null, undefined all mean disabled
 		const layoutEnabled = !!layoutObj;
 		const transform = this.extractTransform(container);
+		const filters = this.extractFilters(container);
 
 		const children: ContainerNode[] = [];
 		for (const child of container.children) {
@@ -127,7 +138,7 @@ export class LayoutDebugBridge {
 			}
 		}
 
-		return {
+		const node: ContainerNode = {
 			id: container.label || `[${container.constructor.name}]`,
 			type: container.constructor.name,
 			layout,
@@ -135,6 +146,12 @@ export class LayoutDebugBridge {
 			transform,
 			children,
 		};
+
+		if (filters.length > 0) {
+			node.filters = filters;
+		}
+
+		return node;
 	}
 
 	private extractTransform(container: Container): ContainerNode["transform"] {
@@ -174,6 +191,176 @@ export class LayoutDebugBridge {
 		}
 
 		return result;
+	}
+
+	// Internal PixiJS uniforms to skip
+	private static readonly INTERNAL_UNIFORMS = new Set([
+		"uTexture",
+		"uSampler",
+		"uInputSize",
+		"uInputPixel",
+		"uInputClamp",
+		"uOutputFrame",
+		"uGlobalFrame",
+		"uOutputTexture",
+	]);
+
+	private extractFilters(container: Container): FilterInfo[] {
+		const filters = container.filters;
+		if (!filters || !Array.isArray(filters) || filters.length === 0) {
+			return [];
+		}
+
+
+		const result: FilterInfo[] = [];
+
+		for (let i = 0; i < filters.length; i++) {
+			const filter = filters[i] as Filter;
+			if (!filter) continue;
+
+
+			const uniforms: FilterUniform[] = [];
+
+			// PixiJS v8 filter structure: filter.resources contains UniformGroups
+			// Resources properties are non-enumerable, so we need to use getOwnPropertyNames or for...in
+			const resources = (filter as unknown as { resources?: Record<string, unknown> }).resources;
+
+			if (resources) {
+				// Try multiple methods to get resource keys since they may be non-enumerable
+				let resourceKeys: string[] = Object.getOwnPropertyNames(resources);
+
+				// If that doesn't work, try Reflect.ownKeys
+				if (resourceKeys.length === 0) {
+					resourceKeys = Reflect.ownKeys(resources).filter(k => typeof k === 'string') as string[];
+				}
+
+				// If still empty, try for...in loop (includes prototype chain)
+				if (resourceKeys.length === 0) {
+					for (const key in resources) {
+						resourceKeys.push(key);
+					}
+				}
+
+
+				for (const groupName of resourceKeys) {
+					const group = resources[groupName];
+
+					// Skip non-uniform resources
+					if (!group || typeof group !== "object") continue;
+
+					const uniformGroup = group as {
+						uniforms?: Record<string, unknown>;
+						uniformStructures?: Record<string, { type?: string; value?: unknown }>;
+						isUniformGroup?: boolean;
+					};
+
+					// Check if this is a UniformGroup
+					if (!uniformGroup.isUniformGroup) continue;
+
+					const groupUniforms = uniformGroup.uniforms;
+					const groupStructures = uniformGroup.uniformStructures;
+
+					if (!groupUniforms || typeof groupUniforms !== "object") continue;
+
+
+					for (const [uniformName, value] of Object.entries(groupUniforms)) {
+						// Skip internal PixiJS uniforms
+						if (LayoutDebugBridge.INTERNAL_UNIFORMS.has(uniformName)) continue;
+
+						// Get type from uniformStructures if available
+						let uniformType = "unknown";
+						if (groupStructures && groupStructures[uniformName]) {
+							uniformType = groupStructures[uniformName].type || "unknown";
+						} else {
+							// Infer type from value
+							uniformType = this.inferUniformType(value);
+						}
+
+						uniforms.push({
+							name: uniformName,
+							type: uniformType,
+							value: this.serializeUniformValue(value),
+							groupName,
+						});
+					}
+				}
+			}
+
+
+			if (uniforms.length > 0) {
+				result.push({
+					index: i,
+					className: filter.constructor.name,
+					uniforms,
+				});
+			}
+		}
+
+		return result;
+	}
+
+	private inferUniformType(value: unknown): string {
+		if (typeof value === "number") return "f32";
+		if (typeof value === "boolean") return "bool";
+		if (Array.isArray(value)) {
+			if (value.length === 2) return "vec2<f32>";
+			if (value.length === 3) return "vec3<f32>";
+			if (value.length === 4) return "vec4<f32>";
+		}
+		// Check for Float32Array
+		if (value instanceof Float32Array) {
+			if (value.length === 2) return "vec2<f32>";
+			if (value.length === 3) return "vec3<f32>";
+			if (value.length === 4) return "vec4<f32>";
+			if (value.length === 9) return "mat3x3<f32>";
+			if (value.length === 16) return "mat4x4<f32>";
+		}
+		return "unknown";
+	}
+
+	private serializeUniformValue(value: unknown): unknown {
+		// Convert Float32Array to regular array for JSON serialization
+		if (value instanceof Float32Array) {
+			return Array.from(value);
+		}
+		return value;
+	}
+
+	private setFilterUniform(
+		id: string,
+		filterIndex: number,
+		groupName: string,
+		uniformName: string,
+		value: unknown
+	): void {
+		const container = this.findContainerById(id);
+		if (!container) return;
+
+		const filters = container.filters;
+		if (!filters || !Array.isArray(filters) || filterIndex >= filters.length) {
+			console.warn(`[LayoutDebugBridge] Filter not found: ${id}[${filterIndex}]`);
+			return;
+		}
+
+		const filter = filters[filterIndex] as Filter;
+		if (!filter) return;
+
+		const resources = (filter as unknown as { resources?: Record<string, unknown> }).resources;
+		if (!resources) return;
+
+		const group = resources[groupName] as { uniforms?: Record<string, unknown> } | undefined;
+		if (!group?.uniforms) return;
+
+		// Update the uniform value
+		group.uniforms[uniformName] = value;
+
+		// Send updated filter info back
+		this._channel?.postMessage({
+			type: "filter-updated",
+			id,
+			filterIndex,
+			uniforms: this.extractFilters(container)[filterIndex]?.uniforms || [],
+		});
 	}
 
 	private findContainerById(id: string): Container | null {

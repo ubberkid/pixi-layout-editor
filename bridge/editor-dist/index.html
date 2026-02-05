@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Layout Editor</title>
-    <script type="module" crossorigin src="./assets/index-DwQZrgyq.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-urlSHc0v.css">
+    <script type="module" crossorigin src="./assets/index-DoW8saSY.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CR-xPHcF.css">
   </head>
   <body>
     <div id="app">
@@ -27,16 +27,30 @@
       <main id="content">
         <aside id="tree-panel">
           <h2>Containers</h2>
-          <label class="tree-option">
-            <input type="checkbox" id="show-children-toggle" />
-            <span>Highlight Children</span>
-          </label>
+          <div class="tree-option">
+            <label for="highlight-mode">Highlight:</label>
+            <select id="highlight-mode">
+              <option value="none">None</option>
+              <option value="selected" selected>Selected</option>
+              <option value="children">With Children</option>
+            </select>
+          </div>
           <div id="tree-view"></div>
         </aside>
+        <div id="resize-handle"></div>
         <section id="property-panel">
-          <h2>Properties</h2>
+          <div id="property-tabs">
+            <button id="tab-layout" class="property-tab active">Layout</button>
+            <button id="tab-filters" class="property-tab" disabled>Filters</button>
+          </div>
           <div id="no-selection">Select a container</div>
-          <div id="property-form" style="display: none;"></div>
+          <div id="layout-content" style="display: none;">
+            <div id="property-form"></div>
+          </div>
+          <div id="filters-content" style="display: none;">
+            <div id="no-filters">No filters on this container</div>
+            <div id="filter-form"></div>
+          </div>
         </section>
       </main>
       <div id="changes-modal" class="modal" style="display: none;">

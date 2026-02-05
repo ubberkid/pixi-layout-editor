@@ -13,6 +13,11 @@ export declare class LayoutDebugBridge {
     private serializeContainer;
     private extractTransform;
     private extractLayout;
+    private static readonly INTERNAL_UNIFORMS;
+    private extractFilters;
+    private inferUniformType;
+    private serializeUniformValue;
+    private setFilterUniform;
     private findContainerById;
     private setProperty;
     private highlightContainer;

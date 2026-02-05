@@ -84,11 +84,6 @@ export class TreeView {
     if (node.id === this._selectedId) {
       header.classList.add('selected');
     }
-    if (!layoutEnabled) {
-      header.classList.add('tree-node-disabled');
-    } else if (!hasLayoutProps) {
-      header.classList.add('tree-node-no-layout');
-    }
 
     const toggle = document.createElement('span');
     toggle.className = 'tree-node-toggle';
@@ -112,19 +107,23 @@ export class TreeView {
       label.appendChild(changeDot);
     }
 
-    // Show indicator for layout status
-    if (!layoutEnabled) {
-      const badge = document.createElement('span');
-      badge.className = 'tree-node-badge disabled';
-      badge.textContent = '✗';
-      badge.title = 'Layout disabled';
-      label.appendChild(badge);
-    } else if (hasLayoutProps) {
+    // Show indicator for layout participation
+    if (hasLayoutProps && layoutEnabled) {
       const badge = document.createElement('span');
       badge.className = 'tree-node-badge';
       badge.textContent = 'L';
       badge.title = 'Has layout properties';
       label.appendChild(badge);
+    }
+
+    // Show indicator for filters/shaders
+    const hasFilters = node.filters && node.filters.length > 0;
+    if (hasFilters) {
+      const filterBadge = document.createElement('span');
+      filterBadge.className = 'tree-node-badge shader';
+      filterBadge.textContent = 'S';
+      filterBadge.title = `Has ${node.filters!.length} filter(s)`;
+      label.appendChild(filterBadge);
     }
 
     header.appendChild(toggle);

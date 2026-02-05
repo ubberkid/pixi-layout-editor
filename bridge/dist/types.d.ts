@@ -1,3 +1,14 @@
+export interface FilterUniform {
+    name: string;
+    type: string;
+    value: unknown;
+    groupName: string;
+}
+export interface FilterInfo {
+    index: number;
+    className: string;
+    uniforms: FilterUniform[];
+}
 export interface ContainerNode {
     id: string;
     type: string;
@@ -16,6 +27,7 @@ export interface ContainerNode {
         alpha: number;
         hasAnchor: boolean;
     };
+    filters?: FilterInfo[];
     children: ContainerNode[];
 }
 export interface SetPropertyMessage {
@@ -33,7 +45,15 @@ export interface GetLayoutMessage {
     type: "get-layout";
     id: string;
 }
+export interface SetFilterUniformMessage {
+    type: "set-filter-uniform";
+    id: string;
+    filterIndex: number;
+    groupName: string;
+    uniformName: string;
+    value: unknown;
+}
 export type EditorMessage = {
     type: "get-hierarchy";
-} | SetPropertyMessage | HighlightMessage | GetLayoutMessage;
+} | SetPropertyMessage | HighlightMessage | GetLayoutMessage | SetFilterUniformMessage;
 //# sourceMappingURL=types.d.ts.map
